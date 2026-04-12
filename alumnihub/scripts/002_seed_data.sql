@@ -1,0 +1,48 @@
+-- ═══════════════════════════════════════════════════════════════
+-- AlumniHub Seed Data (Development Only)
+-- Run AFTER 001_create_tables.sql and 003_rls_policies.sql
+-- NOTE: Create users via Supabase Auth first, then update profiles
+-- ═══════════════════════════════════════════════════════════════
+
+-- ── Sample Announcements ──
+-- (Use a real admin profile_id after creating users)
+-- INSERT INTO announcements (posted_by, title, content, target_audience)
+-- VALUES
+--     ('ADMIN_USER_ID', 'Welcome to AlumniHub!', 'We are excited to launch AlumniHub...', 'all'),
+--     ('ADMIN_USER_ID', 'Career Fair 2026', 'Join us for the annual career fair...', 'alumni');
+
+-- ── Sample Job Listings ──
+-- INSERT INTO job_listings (posted_by, title, company, description, requirements, location, job_type, industry, required_skills, experience_level)
+-- VALUES
+--     ('FACULTY_USER_ID', 'Junior Software Developer', 'Accenture Philippines', 'Develop and maintain web applications...', '1-2 years experience in web development', 'Quezon City, Metro Manila', 'full-time', 'Information Technology', ARRAY['JavaScript', 'React', 'Node.js', 'SQL'], 'entry'),
+--     ('FACULTY_USER_ID', 'Data Analyst', 'Globe Telecom', 'Analyze business data and create reports...', 'Experience with SQL and data visualization', 'Taguig, Metro Manila', 'full-time', 'Telecommunications', ARRAY['SQL', 'Python', 'Tableau', 'Excel'], 'entry'),
+--     ('FACULTY_USER_ID', 'IT Project Manager', 'DOST-ICT', 'Manage IT projects for government digitalization...', '3+ years PM experience', 'Quezon City, Metro Manila', 'full-time', 'Government', ARRAY['Project Management', 'Agile', 'JIRA', 'Communication'], 'mid');
+
+-- ═══════════════════════════════════════════════════════════════
+-- INSTRUCTIONS FOR SEEDING:
+-- 
+-- 1. Go to Supabase Dashboard > Authentication > Users
+-- 2. Create test users with these emails:
+--    - alumni1@test.com (role: alumni)
+--    - alumni2@test.com (role: alumni)
+--    - faculty1@test.com (role: faculty)
+--    - admin1@test.com (role: admin)
+--    
+-- 3. After users are created, their profiles will auto-generate
+--    via the trigger. Then update them:
+--
+-- UPDATE profiles SET
+--     first_name = 'Juan',
+--     last_name = 'Dela Cruz',
+--     program = 'BS Information Systems',
+--     department = 'College of Information Technology',
+--     graduation_year = 2023,
+--     current_job_title = 'Software Developer',
+--     current_company = 'Accenture Philippines',
+--     industry = 'Information Technology',
+--     skills = ARRAY['JavaScript', 'React', 'Python', 'SQL']
+-- WHERE email = 'alumni1@test.com';
+--
+-- 4. Then uncomment and run the INSERT statements above
+--    replacing the placeholder IDs with actual user UUIDs
+-- ═══════════════════════════════════════════════════════════════
