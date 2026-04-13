@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { authService } from "../services/api";
-import api from "../services/api";
+import { supabase } from "../services/supabase";
 import { GraduationCap, Eye, EyeOff, Loader2 } from "lucide-react";
 
 export default function RegisterPage() {
@@ -40,21 +39,29 @@ export default function RegisterPage() {
 
     setLoading(true);
     try {
-      // Register via server (uses admin API — no email confirmation needed)
-      await api.post("/auth/register", {
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email: form.email,
         password: form.password,
-        first_name: form.first_name,
-        last_name: form.last_name,
-        role: form.role,
+        options: {
+          data: {
+            first_name: form.first_name,
+            last_name: form.last_name,
+            role: form.role,
+          },
+        },
       });
 
-      // Sign in immediately after registration
-      const { error: signInError } = await authService.signIn(form.email, form.password);
-      if (signInError) throw signInError;
-      navigate("/dashboard");
+      if (signUpError) throw signUpError;
+
+      // If email confirmation is disabled in Supabase, session is returned immediately
+      if (data.session) {
+        navigate("/dashboard");
+      } else {
+        // Email confirmation is enabled — inform the user
+        setError("Check your email for a confirmation link, then sign in.");
+      }
     } catch (err) {
-      setError(err.response?.data?.error || err.message || "Registration failed.");
+      setError(err.message || "Registration failed.");
     } finally {
       setLoading(false);
     }
