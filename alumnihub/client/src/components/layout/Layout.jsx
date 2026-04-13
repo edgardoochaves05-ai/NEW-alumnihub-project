@@ -45,8 +45,10 @@ export default function Layout() {
         {/* User Info */}
         <div className="p-4 border-b border-gray-800">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-sm font-semibold">
-              {profile?.first_name?.[0] || user?.email?.[0]?.toUpperCase() || "?"}
+            <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-sm font-semibold overflow-hidden flex-shrink-0">
+              {profile?.avatar_url
+                ? <img src={profile.avatar_url} alt="avatar" className="w-10 h-10 object-cover"/>
+                : (profile?.first_name?.[0] || user?.email?.[0]?.toUpperCase() || "?")}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">

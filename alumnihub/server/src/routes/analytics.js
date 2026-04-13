@@ -21,6 +21,56 @@ router.get("/dashboard", authenticate, authorize("faculty", "admin"), async (req
   }
 });
 
+// ── Alumni Dashboard Stats ──
+router.get("/alumni-dashboard", authenticate, async (req, res, next) => {
+  try {
+    const profileId = req.user.id;
+
+    const [
+      { count: totalJobs },
+      { data: conversations },
+      { data: matchedJobs },
+      { data: announcements },
+    ] = await Promise.all([
+      supabase.from("job_listings").select("*", { count: "exact", head: true }).eq("is_active", true),
+      supabase.from("conversation_participants").select("conversation_id").eq("profile_id", profileId),
+      supabase.from("job_match_scores").select("match_score, job_listings(id, title, company, industry, job_type)").eq("profile_id", profileId).order("match_score", { ascending: false }).limit(3),
+      supabase.from("announcements").select("id, title, content, created_at, target_audience").eq("is_published", true).order("created_at", { ascending: false }).limit(5),
+    ]);
+
+    // Count unread messages across all conversations
+    let unreadCount = 0;
+    if (conversations?.length) {
+      for (const { conversation_id } of conversations) {
+        const { data: cp } = await supabase
+          .from("conversation_participants")
+          .select("last_read_at")
+          .eq("conversation_id", conversation_id)
+          .eq("profile_id", profileId)
+          .single();
+
+        const { count } = await supabase
+          .from("messages")
+          .select("*", { count: "exact", head: true })
+          .eq("conversation_id", conversation_id)
+          .neq("sender_id", profileId)
+          .gt("created_at", cp?.last_read_at || "1970-01-01");
+
+        unreadCount += count || 0;
+      }
+    }
+
+    res.json({
+      totalJobs: totalJobs || 0,
+      unreadMessages: unreadCount,
+      topMatches: matchedJobs || [],
+      announcements: announcements || [],
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── Career Path Prediction ──
 router.get("/career-prediction/:profileId", authenticate, async (req, res, next) => {
   try {

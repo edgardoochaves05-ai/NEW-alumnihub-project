@@ -28,7 +28,7 @@ router.put("/me", authenticate, async (req, res, next) => {
       "address", "city", "avatar_url", "bio", "student_number",
       "program", "department", "graduation_year", "batch_year",
       "current_job_title", "current_company", "industry",
-      "skills", "linkedin_url",
+      "skills", "linkedin_url", "is_private",
     ];
 
     const updates = {};
@@ -95,6 +95,47 @@ router.get("/:id", authenticate, async (req, res, next) => {
     if (error) throw error;
     if (!data) return res.status(404).json({ error: "Profile not found" });
     res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Upload Avatar ──
+router.post("/avatar", authenticate, async (req, res, next) => {
+  try {
+    const { fileBase64, fileName, mimeType } = req.body;
+    if (!fileBase64 || !fileName) return res.status(400).json({ error: "Missing file data." });
+
+    const buffer = Buffer.from(fileBase64, "base64");
+    const ext    = fileName.split(".").pop();
+    const storagePath = `avatars/${req.user.id}-${Date.now()}.${ext}`;
+
+    // Ensure the bucket exists (create if not)
+    const { data: buckets } = await supabase.storage.listBuckets();
+    const bucketExists = buckets?.some(b => b.name === "cv-uploads");
+    if (!bucketExists) {
+      await supabase.storage.createBucket("cv-uploads", { public: true });
+    }
+
+    const { error: uploadErr } = await supabase.storage
+      .from("cv-uploads")
+      .upload(storagePath, buffer, { contentType: mimeType || "image/jpeg", upsert: true });
+
+    if (uploadErr) throw uploadErr;
+
+    const { data: urlData } = supabase.storage.from("cv-uploads").getPublicUrl(storagePath);
+    const avatarUrl = urlData.publicUrl;
+
+    // Save to profile
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({ avatar_url: avatarUrl })
+      .eq("id", req.user.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json({ avatar_url: avatarUrl, profile: data });
   } catch (err) {
     next(err);
   }
