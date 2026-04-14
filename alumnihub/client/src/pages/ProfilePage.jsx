@@ -9,7 +9,7 @@ import {
   Linkedin, Edit2, Save, X, Plus, Trash2, Loader2,
   CheckCircle, Lock, Unlock, Tag, Calendar, Building2,
   Award, BookOpen, Star, ChevronDown, ChevronUp, Upload,
-  FileText, Camera,
+  FileText, Camera, Eye, EyeOff, ExternalLink,
 } from "lucide-react";
 
 // ── Constants ──────────────────────────────────────────────────
@@ -339,6 +339,7 @@ export default function ProfilePage() {
   const fileInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState("");
+  const [showResume, setShowResume] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -753,10 +754,17 @@ export default function ProfilePage() {
           <SectionHeader icon={FileText} title="Resume / CV" />
           <div className="flex items-center gap-4 flex-wrap">
             {profile.cv_url ? (
-              <a href={profile.cv_url} target="_blank" rel="noreferrer"
-                className="inline-flex items-center gap-2 text-sm text-blue-600 hover:underline">
-                <FileText size={15} /> View uploaded CV
-              </a>
+              <>
+                <button onClick={() => setShowResume(v => !v)}
+                  className="inline-flex items-center gap-2 text-sm text-blue-600 hover:underline">
+                  {showResume ? <EyeOff size={15}/> : <Eye size={15}/>}
+                  {showResume ? "Hide Resume" : "View Resume"}
+                </button>
+                <a href={profile.cv_url} target="_blank" rel="noreferrer"
+                  className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700">
+                  <ExternalLink size={14}/> Open in new tab
+                </a>
+              </>
             ) : (
               <p className="text-sm text-gray-400 italic">No CV uploaded yet.</p>
             )}
@@ -767,6 +775,38 @@ export default function ProfilePage() {
               {profile.cv_url ? "Replace CV" : "Upload CV"}
             </button>
           </div>
+
+          {/* Inline PDF Viewer */}
+          {showResume && profile.cv_url && (
+            <div className="mt-4 rounded-xl overflow-hidden border border-gray-200">
+              {profile.cv_url.toLowerCase().includes(".pdf") ? (
+                <iframe
+                  src={profile.cv_url}
+                  title="Resume Preview"
+                  className="w-full h-[700px] bg-gray-50"
+                >
+                  <div className="flex flex-col items-center justify-center h-full py-12 text-gray-500">
+                    <FileText size={32} className="mb-3 opacity-40"/>
+                    <p className="text-sm">Your browser cannot display this PDF inline.</p>
+                    <a href={profile.cv_url} target="_blank" rel="noreferrer"
+                      className="mt-2 text-sm text-blue-600 hover:underline flex items-center gap-1">
+                      <ExternalLink size={13}/> Open PDF in new tab
+                    </a>
+                  </div>
+                </iframe>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                  <FileText size={32} className="mb-3 opacity-40"/>
+                  <p className="text-sm">Inline preview is only available for PDF files.</p>
+                  <a href={profile.cv_url} target="_blank" rel="noreferrer"
+                    className="mt-2 text-sm text-blue-600 hover:underline flex items-center gap-1">
+                    <ExternalLink size={13}/> Open document in new tab
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
+
           {uploadMsg && (
             <p className={`mt-3 text-sm ${uploadMsg.includes("failed") || uploadMsg.includes("Only") ? "text-red-600" : "text-green-600"}`}>
               {uploadMsg}
