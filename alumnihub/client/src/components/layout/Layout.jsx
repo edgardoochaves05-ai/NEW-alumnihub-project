@@ -1,7 +1,7 @@
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import {
-  LayoutDashboard, User, Users, Briefcase, Mail, MailQuestion,
+  LayoutDashboard, User, Users, Briefcase, Mail,
   BarChart3, Settings, LogOut, TrendingUp, GraduationCap,
 } from "lucide-react";
 
@@ -11,7 +11,6 @@ const navItems = [
   { to: "/alumni", icon: Users, label: "Alumni Directory", roles: ["faculty", "admin"] },
   { to: "/jobs", icon: Briefcase, label: "Jobs", roles: ["alumni", "faculty", "admin"] },
   { to: "/messages", icon: Mail, label: "Inbox", roles: ["alumni", "faculty", "admin"] },
-  { to: "/message-requests", icon: MailQuestion, label: "Message Requests", roles: ["alumni"] },
   { to: "/career-prediction", icon: TrendingUp, label: "Career Prediction", roles: ["alumni", "faculty"] },
   { to: "/reports", icon: BarChart3, label: "Reports", roles: ["faculty", "admin"] },
   { to: "/curriculum-impact", icon: GraduationCap, label: "Curriculum Impact", roles: ["faculty", "admin"] },

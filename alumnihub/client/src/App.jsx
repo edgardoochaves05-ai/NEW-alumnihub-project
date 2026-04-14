@@ -14,7 +14,6 @@ import ReportsPage from "./pages/ReportsPage";
 import CareerPredictionPage from "./pages/CareerPredictionPage";
 import CurriculumImpactPage from "./pages/CurriculumImpactPage";
 import SettingsPage from "./pages/SettingsPage";
-import MessageRequestsPage from "./pages/MessageRequestsPage";
 
 // Protected route wrapper
 function ProtectedRoute({ children, allowedRoles }) {
@@ -66,7 +65,6 @@ function AppRoutes() {
 
         <Route path="jobs" element={<JobsPage />} />
         <Route path="messages" element={<MessagesPage />} />
-        <Route path="message-requests" element={<MessageRequestsPage />} />
         <Route path="settings" element={<SettingsPage />} />
 
         {/* Career Prediction - Alumni and Faculty */}
