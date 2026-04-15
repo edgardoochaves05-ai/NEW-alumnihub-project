@@ -38,8 +38,10 @@ router.put("/me", authenticate, async (req, res, next) => {
 
     const { data, error } = await supabase
       .from("profiles")
-      .update(updates)
-      .eq("id", req.user.id)
+      .upsert(
+        { id: req.user.id, email: req.user.email, ...updates },
+        { onConflict: "id" }
+      )
       .select()
       .single();
 

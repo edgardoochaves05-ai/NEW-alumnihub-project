@@ -307,7 +307,7 @@ function MilestoneModal({ form, setForm, onSave, onClose, saving }) {
 // ── Main Page ────────────────────────────────────────────────────
 export default function ProfilePage() {
   const { id: paramId } = useParams();
-  const { user, profile: authProfile, isAlumni, refreshProfile } = useAuth();
+  const { user, profile: authProfile, refreshProfile } = useAuth();
 
   const isOwnProfile = !paramId || paramId === user?.id;
   const profileId = paramId || user?.id;
@@ -356,16 +356,33 @@ export default function ProfilePage() {
           .select("*")
           .eq("id", profileId)
           .single();
-        if (pErr) throw pErr;
 
-        const { data: m } = await supabase
-          .from("career_milestones")
-          .select("*")
-          .eq("profile_id", profileId)
-          .order("start_date", { ascending: false });
+        if (pErr) {
+          // No profile row yet — seed from auth user_metadata so the form
+          // opens pre-filled and the user can save to create the row.
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          const meta = authUser?.user_metadata || {};
+          profileData = {
+            id: profileId,
+            email: authUser?.email || null,
+            role: meta.role || authProfile?.role || null,
+            first_name: meta.first_name || null,
+            last_name: meta.last_name || null,
+            skills: [],
+          };
+          milestonesData = [];
+          // Auto-open edit mode so the user immediately sees the form
+          setEditing(true);
+        } else {
+          const { data: m } = await supabase
+            .from("career_milestones")
+            .select("*")
+            .eq("profile_id", profileId)
+            .order("start_date", { ascending: false });
 
-        profileData   = p;
-        milestonesData = m || [];
+          profileData    = p;
+          milestonesData = m || [];
+        }
       } else {
         // Other user's profile — go through server (handles privacy/RLS)
         const { data } = await api.get(`/profiles/${profileId}`);
@@ -382,6 +399,7 @@ export default function ProfilePage() {
       );
     } catch (e) {
       console.error("loadProfile error:", e);
+      // profile stays null → "Profile not found" shown only for other-user profiles
     } finally {
       setLoading(false);
     }

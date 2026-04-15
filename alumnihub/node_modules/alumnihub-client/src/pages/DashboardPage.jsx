@@ -415,10 +415,75 @@ function FacultyAdminDashboard({ profile }) {
   );
 }
 
+// ── Student Dashboard (Announcements only) ─────────────────────
+function StudentDashboard({ profile }) {
+  const [announcements, setAnnouncements] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    import("../services/supabase").then(({ supabase }) => {
+      supabase
+        .from("announcements")
+        .select("id, title, content, created_at")
+        .eq("is_published", true)
+        .order("created_at", { ascending: false })
+        .limit(10)
+        .then(({ data }) => {
+          setAnnouncements(data || []);
+          setLoading(false);
+        });
+    });
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 size={28} className="animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">
+          Welcome, {profile?.first_name || "Student"}!
+        </h1>
+        <p className="text-gray-500 mt-1 text-sm">
+          {new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+        </p>
+      </div>
+
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold text-gray-900">Announcements</h2>
+          <Bell size={16} className="text-gray-400" />
+        </div>
+        {announcements.length === 0 ? (
+          <p className="text-gray-400 text-sm text-center py-10">No announcements yet.</p>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {announcements.map((a) => (
+              <div key={a.id} className="py-4">
+                <p className="text-sm font-medium text-gray-900">{a.title}</p>
+                <p className="text-sm text-gray-500 mt-1 leading-relaxed">{a.content}</p>
+                <p className="text-xs text-gray-400 mt-2">
+                  {formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Export ────────────────────────────────────────────────
 export default function DashboardPage() {
   const { profile, isAlumni } = useAuth();
 
+  if (profile?.role === "student") return <StudentDashboard profile={profile} />;
   if (isAlumni) return <AlumniDashboard profile={profile} />;
   return <FacultyAdminDashboard profile={profile} />;
 }

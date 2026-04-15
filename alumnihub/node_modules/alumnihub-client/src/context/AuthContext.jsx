@@ -14,7 +14,7 @@ export function AuthProvider({ children }) {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
-      if (session?.user) fetchProfile(session.user.id);
+      if (session?.user) fetchProfile(session.user);
       else setLoading(false);
     });
 
@@ -23,7 +23,7 @@ export function AuthProvider({ children }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
-      if (session?.user) fetchProfile(session.user.id);
+      if (session?.user) fetchProfile(session.user);
       else {
         setProfile(null);
         setLoading(false);
@@ -33,18 +33,30 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  async function fetchProfile(userId) {
+  async function fetchProfile(sessionUser) {
     try {
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
-        .eq("id", userId)
+        .eq("id", sessionUser.id)
         .single();
 
       if (error) throw error;
-      setProfile(data);
+
+      // If the profiles row exists but role is missing, fall back to user_metadata
+      const role = data.role || sessionUser.user_metadata?.role || null;
+      setProfile({ ...data, role });
     } catch (err) {
       console.error("Error fetching profile:", err);
+      // Profile row doesn't exist yet — build a minimal profile from user_metadata
+      const meta = sessionUser.user_metadata;
+      setProfile({
+        id: sessionUser.id,
+        role: meta?.role || null,
+        first_name: meta?.first_name || null,
+        last_name: meta?.last_name || null,
+        email: sessionUser.email,
+      });
     } finally {
       setLoading(false);
     }
@@ -57,7 +69,7 @@ export function AuthProvider({ children }) {
     isAlumni: profile?.role === "alumni",
     isFaculty: profile?.role === "faculty",
     isAdmin: profile?.role === "admin",
-    refreshProfile: () => user && fetchProfile(user.id),
+    refreshProfile: () => user && fetchProfile(user),
   };
 
   return (
