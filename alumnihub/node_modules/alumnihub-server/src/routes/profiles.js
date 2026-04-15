@@ -85,39 +85,6 @@ router.get("/alumni", authenticate, async (req, res, next) => {
   }
 });
 
-// ── Get students list (with filters) ──
-router.get("/students", authenticate, async (req, res, next) => {
-  try {
-    const { program, department, batch_year, search, page = 1, limit = 20 } = req.query;
-    const offset = (page - 1) * limit;
-
-    let query = supabase
-      .from("profiles")
-      .select("id, first_name, last_name, email, student_number, program, department, batch_year, avatar_url, gender", { count: "exact" })
-      .eq("role", "student")
-      .eq("is_active", true)
-      .order("last_name", { ascending: true })
-      .range(offset, offset + limit - 1);
-
-    if (program) query = query.eq("program", program);
-    if (department) query = query.eq("department", department);
-    if (batch_year) query = query.eq("batch_year", parseInt(batch_year));
-    if (search) query = query.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%`);
-
-    const { data, error, count } = await query;
-    if (error) throw error;
-
-    res.json({
-      students: data,
-      total: count,
-      page: parseInt(page),
-      totalPages: Math.ceil(count / limit),
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
 // ── Get profile by ID ──
 router.get("/:id", authenticate, async (req, res, next) => {
   try {

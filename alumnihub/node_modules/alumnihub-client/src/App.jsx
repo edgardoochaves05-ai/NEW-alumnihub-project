@@ -14,7 +14,6 @@ import ReportsPage from "./pages/ReportsPage";
 import CareerPredictionPage from "./pages/CareerPredictionPage";
 import CurriculumImpactPage from "./pages/CurriculumImpactPage";
 import SettingsPage from "./pages/SettingsPage";
-import StudentListPage from "./pages/StudentListPage";
 
 // Protected route wrapper
 function ProtectedRoute({ children, allowedRoles }) {
@@ -60,16 +59,6 @@ function AppRoutes() {
           element={
             <ProtectedRoute allowedRoles={["faculty", "admin"]}>
               <AlumniListPage />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Student Directory - Faculty and Admin only */}
-        <Route
-          path="students"
-          element={
-            <ProtectedRoute allowedRoles={["faculty", "admin"]}>
-              <StudentListPage />
             </ProtectedRoute>
           }
         />
