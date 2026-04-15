@@ -87,11 +87,11 @@ function AppRoutes() {
           }
         />
 
-        {/* Settings — Alumni and Faculty only */}
+        {/* Settings — Alumni, Faculty, and Admin */}
         <Route
           path="settings"
           element={
-            <ProtectedRoute allowedRoles={["alumni", "faculty"]}>
+            <ProtectedRoute allowedRoles={["alumni", "faculty", "admin"]}>
               <SettingsPage />
             </ProtectedRoute>
           }
@@ -107,21 +107,21 @@ function AppRoutes() {
           }
         />
 
-        {/* Reports — Faculty only */}
+        {/* Reports — Faculty and Admin */}
         <Route
           path="reports"
           element={
-            <ProtectedRoute allowedRoles={["faculty"]}>
+            <ProtectedRoute allowedRoles={["faculty", "admin"]}>
               <ReportsPage />
             </ProtectedRoute>
           }
         />
 
-        {/* Curriculum Impact — Faculty only */}
+        {/* Curriculum Impact — Faculty and Admin */}
         <Route
           path="curriculum-impact"
           element={
-            <ProtectedRoute allowedRoles={["faculty"]}>
+            <ProtectedRoute allowedRoles={["faculty", "admin"]}>
               <CurriculumImpactPage />
             </ProtectedRoute>
           }

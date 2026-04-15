@@ -13,9 +13,9 @@ const navItems = [
   { to: "/jobs",              icon: Briefcase,       label: "Jobs",               roles: ["alumni", "student", "faculty", "admin"] },
   { to: "/messages",          icon: Mail,            label: "Inbox",              roles: ["alumni", "student", "faculty"] },
   { to: "/career-prediction", icon: TrendingUp,      label: "Career Prediction",  roles: ["faculty", "admin"] },
-  { to: "/reports",           icon: BarChart3,       label: "Reports",            roles: ["faculty"] },
-  { to: "/curriculum-impact", icon: GraduationCap,   label: "Curriculum Impact",  roles: ["faculty"] },
-  { to: "/settings",          icon: Settings,        label: "Settings",           roles: ["alumni", "faculty"] },
+  { to: "/reports",           icon: BarChart3,       label: "Reports",            roles: ["faculty", "admin"] },
+  { to: "/curriculum-impact", icon: GraduationCap,   label: "Curriculum Impact",  roles: ["faculty", "admin"] },
+  { to: "/settings",          icon: Settings,        label: "Settings",           roles: ["alumni", "faculty", "admin"] },
 ];
 
 export default function Layout() {
