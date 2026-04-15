@@ -9,6 +9,7 @@ const navItems = [
   { to: "/dashboard",          icon: LayoutDashboard, label: "Dashboard",          roles: ["alumni", "student", "faculty", "admin"] },
   { to: "/profile",            icon: User,            label: "My Profile",          roles: ["alumni", "student", "faculty"] },
   { to: "/alumni",             icon: Users,           label: "Alumni Directory",    roles: ["faculty", "admin"] },
+  { to: "/students",           icon: GraduationCap,   label: "Student Directory",   roles: ["faculty", "admin"] },
   { to: "/jobs",               icon: Briefcase,       label: "Jobs",                roles: ["alumni", "student", "faculty", "admin"] },
   { to: "/messages",           icon: Mail,            label: "Inbox",               roles: ["alumni", "student", "faculty"] },
   { to: "/career-prediction",  icon: TrendingUp,      label: "Career Prediction",   roles: ["faculty", "admin"] },

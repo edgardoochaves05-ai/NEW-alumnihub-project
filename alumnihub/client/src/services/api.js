@@ -36,6 +36,7 @@ export const profileService = {
   updateProfile: (data) => api.put("/profiles/me", data),
   togglePrivacy: (isPrivate) => api.put("/profiles/me", { is_private: isPrivate }),
   getAlumniList: (params) => api.get("/profiles/alumni", { params }),
+  getStudentList: (params) => api.get("/profiles/students", { params }),
   getProfileById: (id) => api.get(`/profiles/${id}`),
 };
 

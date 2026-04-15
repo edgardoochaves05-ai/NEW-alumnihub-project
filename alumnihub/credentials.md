@@ -11,3 +11,7 @@
 ## Student Account
 - Username: edgardo.ochaves05@gmail.com
 - Password: student123
+
+## Alumni Account
+- Username: qelochaves@tip.edu.ph
+- Password: kurt1234

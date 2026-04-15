@@ -12,7 +12,7 @@ router.get("/", authenticate, async (req, res, next) => {
 
     let query = supabase
       .from("job_listings")
-      .select("*, profiles!posted_by(first_name, last_name, role)", { count: "exact" })
+      .select("*, profiles!posted_by(id, first_name, last_name, role)", { count: "exact" })
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
@@ -53,7 +53,7 @@ router.get("/:id", authenticate, async (req, res, next) => {
   try {
     const { data, error } = await supabase
       .from("job_listings")
-      .select("*, profiles!posted_by(first_name, last_name)")
+      .select("*, profiles!posted_by(id, first_name, last_name, role)")
       .eq("id", req.params.id)
       .single();
 
