@@ -1,21 +1,20 @@
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import {
-  LayoutDashboard, User, Users, Briefcase, Mail, MailQuestion,
+  LayoutDashboard, User, Users, Briefcase, Mail,
   BarChart3, Settings, LogOut, TrendingUp, GraduationCap,
 } from "lucide-react";
 
 const navItems = [
-  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", roles: ["alumni", "faculty", "admin"] },
-  { to: "/profile", icon: User, label: "My Profile", roles: ["alumni", "faculty"] },
-  { to: "/alumni", icon: Users, label: "Alumni Directory", roles: ["faculty", "admin"] },
-  { to: "/jobs", icon: Briefcase, label: "Jobs", roles: ["alumni", "faculty", "admin"] },
-  { to: "/messages", icon: Mail, label: "Inbox", roles: ["alumni", "faculty", "admin"] },
-  { to: "/message-requests", icon: MailQuestion, label: "Message Requests", roles: ["alumni"] },
-  { to: "/career-prediction", icon: TrendingUp, label: "Career Prediction", roles: ["alumni", "faculty"] },
-  { to: "/reports", icon: BarChart3, label: "Reports", roles: ["faculty", "admin"] },
-  { to: "/curriculum-impact", icon: GraduationCap, label: "Curriculum Impact", roles: ["faculty", "admin"] },
-  { to: "/settings", icon: Settings, label: "Settings", roles: ["alumni", "faculty", "admin"] },
+  { to: "/dashboard",          icon: LayoutDashboard, label: "Dashboard",          roles: ["alumni", "student", "faculty", "admin"] },
+  { to: "/profile",            icon: User,            label: "My Profile",          roles: ["alumni", "student", "faculty"] },
+  { to: "/alumni",             icon: Users,           label: "Alumni Directory",    roles: ["faculty", "admin"] },
+  { to: "/jobs",               icon: Briefcase,       label: "Jobs",                roles: ["alumni", "student", "faculty", "admin"] },
+  { to: "/messages",           icon: Mail,            label: "Inbox",               roles: ["alumni", "student", "faculty"] },
+  { to: "/career-prediction",  icon: TrendingUp,      label: "Career Prediction",   roles: ["faculty", "admin"] },
+  { to: "/reports",            icon: BarChart3,       label: "Reports",             roles: ["faculty"] },
+  { to: "/curriculum-impact",  icon: GraduationCap,   label: "Curriculum Impact",   roles: ["faculty"] },
+  { to: "/settings",           icon: Settings,        label: "Settings",            roles: ["alumni", "faculty"] },
 ];
 
 export default function Layout() {

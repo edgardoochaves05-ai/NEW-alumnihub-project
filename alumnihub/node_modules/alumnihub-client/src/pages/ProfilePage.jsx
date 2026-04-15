@@ -562,7 +562,9 @@ export default function ProfilePage() {
 
   const displayName = [profile.first_name, profile.last_name].filter(Boolean).join(" ") || profile.email;
   const initials    = [profile.first_name?.[0], profile.last_name?.[0]].filter(Boolean).join("").toUpperCase() || "?";
-  const showAlumniSections = profile.role === "alumni";
+  const showAlumniSections  = profile.role === "alumni" || profile.role === "student";
+  const showProfessionalInfo = profile.role !== "student";
+  const showMilestones       = profile.role === "alumni";
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -705,6 +707,9 @@ export default function ProfilePage() {
           <div className="sm:col-span-2">
             <Field label="Email"       value={profile.email}     editing={false} name="email" />
           </div>
+          <div className="sm:col-span-2">
+            <Field label="LinkedIn URL" value={form.linkedin_url} editing={editing} name="linkedin_url" onChange={handleFieldChange} type="url" placeholder="https://linkedin.com/in/..." />
+          </div>
         </div>
       </div>
 
@@ -724,16 +729,17 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* ── Professional Information ── */}
-      <div className="card">
-        <SectionHeader icon={Briefcase} title="Professional Information" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Current Job Title"  value={form.current_job_title} editing={editing} name="current_job_title" onChange={handleFieldChange} placeholder="Software Engineer" />
-          <Field label="Current Company"    value={form.current_company}   editing={editing} name="current_company"   onChange={handleFieldChange} placeholder="Accenture Philippines" />
-          <Field label="Industry"           value={form.industry}          editing={editing} name="industry"          onChange={handleFieldChange} options={INDUSTRIES} />
-          <Field label="LinkedIn URL"       value={form.linkedin_url}      editing={editing} name="linkedin_url"      onChange={handleFieldChange} type="url" placeholder="https://linkedin.com/in/..." />
+      {/* ── Professional Information (hidden for students) ── */}
+      {showProfessionalInfo && (
+        <div className="card">
+          <SectionHeader icon={Briefcase} title="Professional Information" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Current Job Title"  value={form.current_job_title} editing={editing} name="current_job_title" onChange={handleFieldChange} placeholder="Software Engineer" />
+            <Field label="Current Company"    value={form.current_company}   editing={editing} name="current_company"   onChange={handleFieldChange} placeholder="Accenture Philippines" />
+            <Field label="Industry"           value={form.industry}          editing={editing} name="industry"          onChange={handleFieldChange} options={INDUSTRIES} />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── Skills (Alumni only) ── */}
       {showAlumniSections && (
@@ -776,8 +782,8 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* ── Career Milestones (Alumni) ── */}
-      {showAlumniSections && (
+      {/* ── Career Milestones (Alumni only) ── */}
+      {showMilestones && (
         <div className="card">
           <SectionHeader
             icon={TrendingUpIcon}
