@@ -8,6 +8,7 @@ import RegisterPage from "./pages/RegisterPage";
 import DashboardPage from "./pages/DashboardPage";
 import ProfilePage from "./pages/ProfilePage";
 import AlumniListPage from "./pages/AlumniListPage";
+import StudentDirectoryPage from "./pages/StudentDirectoryPage";
 import JobsPage from "./pages/JobsPage";
 import MessagesPage from "./pages/MessagesPage";
 import ReportsPage from "./pages/ReportsPage";
@@ -42,7 +43,7 @@ function AppRoutes() {
         <Route index element={<Navigate to="/dashboard" />} />
         <Route path="dashboard" element={<DashboardPage />} />
 
-        {/* Profile - Alumni and Faculty only (Admin has no personal profile) */}
+        {/* Profile — Alumni, Student, Faculty */}
         <Route
           path="profile"
           element={
@@ -53,7 +54,7 @@ function AppRoutes() {
         />
         <Route path="profile/:id" element={<ProfilePage />} />
 
-        {/* Alumni Directory - Faculty and Admin only (Alumni cannot see directory) */}
+        {/* Alumni Directory — Faculty and Admin only */}
         <Route
           path="alumni"
           element={
@@ -63,10 +64,20 @@ function AppRoutes() {
           }
         />
 
-        {/* Jobs - all roles */}
+        {/* Student Directory — Faculty and Admin only */}
+        <Route
+          path="students"
+          element={
+            <ProtectedRoute allowedRoles={["faculty", "admin"]}>
+              <StudentDirectoryPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Jobs — all roles */}
         <Route path="jobs" element={<JobsPage />} />
 
-        {/* Inbox - Alumni, Student, and Faculty */}
+        {/* Inbox — Alumni, Student, and Faculty */}
         <Route
           path="messages"
           element={
@@ -76,7 +87,7 @@ function AppRoutes() {
           }
         />
 
-        {/* Settings - Alumni and Faculty only */}
+        {/* Settings — Alumni and Faculty only */}
         <Route
           path="settings"
           element={
@@ -86,7 +97,7 @@ function AppRoutes() {
           }
         />
 
-        {/* Career Prediction - Faculty and Admin only */}
+        {/* Career Prediction — Faculty and Admin only */}
         <Route
           path="career-prediction"
           element={
@@ -96,7 +107,7 @@ function AppRoutes() {
           }
         />
 
-        {/* Reports - Faculty only */}
+        {/* Reports — Faculty only */}
         <Route
           path="reports"
           element={
@@ -106,7 +117,7 @@ function AppRoutes() {
           }
         />
 
-        {/* Curriculum Impact - Faculty only */}
+        {/* Curriculum Impact — Faculty only */}
         <Route
           path="curriculum-impact"
           element={
