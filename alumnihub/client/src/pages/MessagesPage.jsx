@@ -3,7 +3,7 @@ import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { formatDistanceToNow, format, isToday, isYesterday } from "date-fns";
 import {
-  Search, Send, Loader2, MessageSquare, Filter,
+  Search, Send, Loader2, MessageSquare, Filter, X,
   Inbox, CheckCircle, XCircle, MailQuestion,
 } from "lucide-react";
 

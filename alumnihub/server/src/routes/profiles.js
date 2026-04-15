@@ -52,6 +52,37 @@ router.put("/me", authenticate, async (req, res, next) => {
   }
 });
 
+// ── Get student list (with filters) ──
+router.get("/students", authenticate, authorize("faculty", "admin"), async (req, res, next) => {
+  try {
+    const { program, search, page = 1, limit = 20 } = req.query;
+    const offset = (page - 1) * limit;
+
+    let query = supabase
+      .from("profiles")
+      .select("id, first_name, last_name, email, program, department, student_number, batch_year, avatar_url", { count: "exact" })
+      .eq("role", "student")
+      .eq("is_active", true)
+      .order("last_name", { ascending: true })
+      .range(offset, offset + limit - 1);
+
+    if (program) query = query.eq("program", program);
+    if (search)  query = query.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%`);
+
+    const { data, error, count } = await query;
+    if (error) throw error;
+
+    res.json({
+      students: data,
+      total: count,
+      page: parseInt(page),
+      totalPages: Math.ceil(count / limit),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── Get alumni list (with filters) ──
 router.get("/alumni", authenticate, async (req, res, next) => {
   try {
