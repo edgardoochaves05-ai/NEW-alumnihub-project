@@ -47,16 +47,21 @@ export function AuthProvider({ children }) {
       const role = data.role || sessionUser.user_metadata?.role || null;
       setProfile({ ...data, role });
     } catch (err) {
-      console.error("Error fetching profile:", err);
-      // Profile row doesn't exist yet — build a minimal profile from user_metadata
+      // Profile row doesn't exist yet — create it from user_metadata, then set state
       const meta = sessionUser.user_metadata;
-      setProfile({
+      const newProfile = {
         id: sessionUser.id,
+        email: sessionUser.email,
         role: meta?.role || null,
         first_name: meta?.first_name || null,
         last_name: meta?.last_name || null,
-        email: sessionUser.email,
-      });
+      };
+      // Persist to DB so the user shows up in directories immediately
+      await supabase.from("profiles").upsert(
+        { ...newProfile, is_active: true },
+        { onConflict: "id" }
+      );
+      setProfile(newProfile);
     } finally {
       setLoading(false);
     }
