@@ -83,6 +83,37 @@ router.get("/students", authenticate, authorize("faculty", "admin"), async (req,
   }
 });
 
+// ── Get faculty list (with filters) — all authenticated roles ──
+router.get("/faculty", authenticate, async (req, res, next) => {
+  try {
+    const { search, program, page = 1, limit = 20 } = req.query;
+    const offset = (page - 1) * limit;
+
+    let query = supabase
+      .from("profiles")
+      .select("id, first_name, last_name, email, avatar_url, program, department, current_job_title, linkedin_url", { count: "exact" })
+      .eq("role", "faculty")
+      .eq("is_active", true)
+      .order("last_name", { ascending: true })
+      .range(offset, offset + limit - 1);
+
+    if (search)  query = query.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%`);
+    if (program) query = query.eq("program", program);
+
+    const { data, error, count } = await query;
+    if (error) throw error;
+
+    res.json({
+      faculty: data,
+      total: count,
+      page: parseInt(page),
+      totalPages: Math.ceil(count / limit),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── Get alumni list (with filters) ──
 router.get("/alumni", authenticate, async (req, res, next) => {
   try {
