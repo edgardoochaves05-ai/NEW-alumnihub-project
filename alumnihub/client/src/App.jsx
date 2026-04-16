@@ -75,6 +75,9 @@ function AppRoutes() {
           }
         />
 
+        {/* Faculty Directory — All roles */}
+        <Route path="faculty-directory" element={<FacultyDirectoryPage />} />
+
         {/* Jobs — all roles */}
         <Route path="jobs" element={<JobsPage />} />
 
