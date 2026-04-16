@@ -1,11 +1,12 @@
 import { useEffect, useState, useRef } from "react";
+import { Link } from "react-router-dom";
 import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { formatDistanceToNow } from "date-fns";
 import {
   Search, Filter, Briefcase, Building2, MapPin, Clock, Plus, X,
   ChevronLeft, ChevronRight, Loader2, Sparkles, ExternalLink,
-  BookmarkPlus, Calendar, GraduationCap
+  BookmarkPlus, Calendar, GraduationCap, User
 } from "lucide-react";
 
 const INDUSTRIES = ["Technology","Finance","Healthcare","Education","Engineering","Business","Government","Non-profit","Other"];
@@ -51,7 +52,19 @@ function JobCard({ job, matchScore, onClick }) {
           {job.salary_max ? ` – ₱ ${Number(job.salary_max).toLocaleString()}` : "+"}
         </p>
       )}
-      <p className="text-xs text-gray-400 mt-2">{formatDistanceToNow(new Date(job.created_at), { addSuffix: true })}</p>
+      <div className="flex items-center justify-between mt-2">
+        {job.profiles ? (
+          <Link
+            to={`/profile/${job.posted_by}`}
+            onClick={e => e.stopPropagation()}
+            className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
+          >
+            <User size={11}/>
+            {job.profiles.first_name} {job.profiles.last_name}
+          </Link>
+        ) : <span/>}
+        <p className="text-xs text-gray-400">{formatDistanceToNow(new Date(job.created_at), { addSuffix: true })}</p>
+      </div>
     </div>
   );
 }
@@ -95,6 +108,24 @@ function JobDetailModal({ job, matchScore, onClose }) {
             <div>
               <h4 className="text-sm font-semibold text-gray-800 mb-2">Requirements</h4>
               <p className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">{job.requirements}</p>
+            </div>
+          )}
+          {job.profiles && (
+            <div className="flex items-center gap-2 pt-1 border-t border-gray-100">
+              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
+                {job.profiles.first_name?.[0]}{job.profiles.last_name?.[0]}
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Posted by</p>
+                <Link
+                  to={`/profile/${job.posted_by}`}
+                  onClick={onClose}
+                  className="text-sm font-medium text-blue-600 hover:underline"
+                >
+                  {job.profiles.first_name} {job.profiles.last_name}
+                </Link>
+                <span className="ml-2 text-xs text-gray-400 capitalize">{job.profiles.role}</span>
+              </div>
             </div>
           )}
           {job.application_url && (
