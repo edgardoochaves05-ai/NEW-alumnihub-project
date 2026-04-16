@@ -7,11 +7,133 @@ import {
   CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
 import {
-  Users, Briefcase, TrendingUp, GraduationCap,
+  Users, Briefcase, TrendingUp,
   Mail, Bell, ChevronRight, Award, BookOpen,
-  ArrowUpRight, Loader2,
+  ArrowUpRight, Loader2, Plus, X,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+
+// ── Category config ─────────────────────────────────────────────
+const CATEGORY_CONFIG = {
+  "Event":       { emoji: "📅", bg: "bg-blue-100",   text: "text-blue-700"   },
+  "Career Fair": { emoji: "💼", bg: "bg-green-100",  text: "text-green-700"  },
+  "Campus News": { emoji: "📰", bg: "bg-purple-100", text: "text-purple-700" },
+  "Mentorship":  { emoji: "🎓", bg: "bg-amber-100",  text: "text-amber-700"  },
+};
+
+// ── CategoryBadge ───────────────────────────────────────────────
+function CategoryBadge({ category }) {
+  if (!category) return null;
+  const cfg = CATEGORY_CONFIG[category] || { emoji: "📌", bg: "bg-gray-100", text: "text-gray-600" };
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${cfg.bg} ${cfg.text}`}>
+      {cfg.emoji} {category}
+    </span>
+  );
+}
+
+// ── AnnouncementModal ───────────────────────────────────────────
+function AnnouncementModal({ onClose, onCreated }) {
+  const [form, setForm] = useState({ title: "", content: "", category: "" });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleChange = (e) =>
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!form.title.trim() || !form.content.trim() || !form.category) {
+      setError("All fields are required.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const { data } = await api.post("/announcements", form);
+      onCreated(data);
+    } catch (err) {
+      setError(err.response?.data?.error || "Failed to post announcement.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+      onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg"
+        onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <h2 className="text-lg font-bold text-gray-900">New Announcement</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X size={20} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && (
+            <div className="px-4 py-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg">
+              {error}
+            </div>
+          )}
+
+          <div>
+            <label className="label">Title *</label>
+            <input
+              name="title"
+              value={form.title}
+              onChange={handleChange}
+              className="input-field"
+              placeholder="Announcement title"
+            />
+          </div>
+
+          <div>
+            <label className="label">Category *</label>
+            <select
+              name="category"
+              value={form.category}
+              onChange={handleChange}
+              className="input-field bg-white"
+            >
+              <option value="">— Select a category —</option>
+              <option value="Event">📅 Event</option>
+              <option value="Career Fair">💼 Career Fair</option>
+              <option value="Campus News">📰 Campus News</option>
+              <option value="Mentorship">🎓 Mentorship</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="label">Content *</label>
+            <textarea
+              name="content"
+              value={form.content}
+              onChange={handleChange}
+              className="input-field resize-none h-32"
+              placeholder="Write your announcement..."
+            />
+          </div>
+
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="btn-primary flex-1 flex items-center justify-center gap-2"
+            >
+              {saving && <Loader2 size={14} className="animate-spin" />}
+              <Bell size={14} /> Post Announcement
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 // ── Stat Card ──────────────────────────────────────────────────
 function StatCard({ icon: Icon, label, value, sub, color = "blue", to }) {
@@ -57,16 +179,19 @@ function computeCompletion(profile) {
 function AlumniDashboard({ profile }) {
   const [data, setData] = useState(null);
   const [recentJobs, setRecentJobs] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       api.get("/analytics/alumni-dashboard"),
       api.get("/jobs?limit=5"),
+      api.get("/announcements?limit=5"),
     ])
-      .then(([dashRes, jobsRes]) => {
+      .then(([dashRes, jobsRes, announcementsRes]) => {
         setData(dashRes.data);
         setRecentJobs(jobsRes.data.jobs || []);
+        setAnnouncements(announcementsRes.data || []);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -94,30 +219,9 @@ function AlumniDashboard({ profile }) {
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard
-          icon={Briefcase}
-          label="Jobs Available"
-          value={data?.totalJobs ?? "—"}
-          sub="Active listings"
-          color="blue"
-          to="/jobs"
-        />
-        <StatCard
-          icon={Mail}
-          label="Unread Messages"
-          value={data?.unreadMessages ?? 0}
-          sub="In your inbox"
-          color="purple"
-          to="/messages"
-        />
-        <StatCard
-          icon={Award}
-          label="Profile Completion"
-          value={`${completion}%`}
-          sub={completion < 100 ? "Complete your profile" : "Profile complete!"}
-          color={completion >= 80 ? "green" : "amber"}
-          to="/profile"
-        />
+        <StatCard icon={Briefcase} label="Jobs Available"    value={data?.totalJobs ?? "—"}     sub="Active listings"                                     color="blue"   to="/jobs" />
+        <StatCard icon={Mail}      label="Unread Messages"   value={data?.unreadMessages ?? 0}   sub="In your inbox"                                       color="purple" to="/messages" />
+        <StatCard icon={Award}     label="Profile Completion" value={`${completion}%`}           sub={completion < 100 ? "Complete your profile" : "Profile complete!"} color={completion >= 80 ? "green" : "amber"} to="/profile" />
       </div>
 
       {/* Profile completion bar */}
@@ -128,10 +232,7 @@ function AlumniDashboard({ profile }) {
             <span className="text-sm font-bold text-blue-600">{completion}%</span>
           </div>
           <div className="w-full bg-gray-100 rounded-full h-2">
-            <div
-              className="bg-blue-600 h-2 rounded-full transition-all duration-500"
-              style={{ width: `${completion}%` }}
-            />
+            <div className="bg-blue-600 h-2 rounded-full transition-all duration-500" style={{ width: `${completion}%` }} />
           </div>
           <Link to="/profile" className="mt-3 inline-flex items-center gap-1 text-sm text-blue-600 font-medium hover:underline">
             Update profile <ArrowUpRight size={14} />
@@ -179,14 +280,17 @@ function AlumniDashboard({ profile }) {
             <h2 className="font-semibold text-gray-900">Announcements</h2>
             <Bell size={16} className="text-gray-400" />
           </div>
-          {!data?.announcements?.length ? (
+          {announcements.length === 0 ? (
             <p className="text-gray-400 text-sm text-center py-6">No announcements yet.</p>
           ) : (
             <div className="divide-y divide-gray-100">
-              {data.announcements.map((a) => (
+              {announcements.map((a) => (
                 <div key={a.id} className="py-3">
-                  <p className="text-sm font-medium text-gray-900">{a.title}</p>
-                  <p className="text-xs text-gray-500 mt-1 line-clamp-2">{a.content}</p>
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <p className="text-sm font-medium text-gray-900">{a.title}</p>
+                    <CategoryBadge category={a.category} />
+                  </div>
+                  <p className="text-xs text-gray-500 line-clamp-2">{a.content}</p>
                   <p className="text-xs text-gray-400 mt-1">
                     {formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
                   </p>
@@ -234,12 +338,17 @@ function FacultyAdminDashboard({ profile }) {
   const [trends, setTrends] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+
+  const fetchAnnouncements = () =>
+    api.get("/announcements?limit=4")
+      .then(({ data }) => setAnnouncements(data || []))
+      .catch(console.error);
 
   useEffect(() => {
     Promise.all([
       api.get("/analytics/dashboard"),
       api.get("/analytics/employment-trends"),
-      api.get("/jobs?limit=1"), // just to confirm connectivity
     ])
       .then(([statsRes, trendsRes]) => {
         setStats(statsRes.data);
@@ -248,16 +357,7 @@ function FacultyAdminDashboard({ profile }) {
       .catch(console.error)
       .finally(() => setLoading(false));
 
-    // Fetch announcements directly via supabase client
-    import("../services/supabase").then(({ supabase }) => {
-      supabase
-        .from("announcements")
-        .select("id, title, content, created_at")
-        .eq("is_published", true)
-        .order("created_at", { ascending: false })
-        .limit(4)
-        .then(({ data }) => setAnnouncements(data || []));
-    });
+    fetchAnnouncements();
   }, []);
 
   if (loading) {
@@ -282,10 +382,10 @@ function FacultyAdminDashboard({ profile }) {
 
       {/* Stats row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={Users}        label="Total Alumni"      value={stats?.totalAlumni ?? "—"}             color="blue"   to="/alumni" />
-        <StatCard icon={Briefcase}    label="Employed"          value={stats?.totalEmployed ?? "—"}           color="green"  sub={`of ${stats?.totalAlumni ?? "?"} alumni`} />
-        <StatCard icon={TrendingUp}   label="Employment Rate"   value={`${stats?.overallEmploymentRate ?? 0}%`} color="purple" />
-        <StatCard icon={BookOpen}     label="Programs"          value={stats?.totalPrograms ?? "—"}           color="amber"  to="/curriculum-impact" />
+        <StatCard icon={Users}      label="Total Alumni"    value={stats?.totalAlumni ?? "—"}               color="blue"   to="/alumni" />
+        <StatCard icon={Briefcase}  label="Employed"        value={stats?.totalEmployed ?? "—"}             color="green"  sub={`of ${stats?.totalAlumni ?? "?"} alumni`} />
+        <StatCard icon={TrendingUp} label="Employment Rate" value={`${stats?.overallEmploymentRate ?? 0}%`} color="purple" />
+        <StatCard icon={BookOpen}   label="Programs"        value={stats?.totalPrograms ?? "—"}             color="amber"  to="/curriculum-impact" />
       </div>
 
       {/* Charts row */}
@@ -295,20 +395,16 @@ function FacultyAdminDashboard({ profile }) {
           <h2 className="font-semibold text-gray-900 mb-1">Employment Trend by Year</h2>
           <p className="text-xs text-gray-500 mb-4">Employed alumni per graduation cohort</p>
           {trends.length === 0 ? (
-            <div className="flex items-center justify-center h-48 text-gray-400 text-sm">
-              No graduation data yet
-            </div>
+            <div className="flex items-center justify-center h-48 text-gray-400 text-sm">No graduation data yet</div>
           ) : (
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={trends} margin={{ top: 4, right: 16, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="year" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip
-                  formatter={(val, name) =>
-                    name === "employmentRate" ? [`${val}%`, "Employment Rate"] : [val, name === "employed" ? "Employed" : "Total"]
-                  }
-                />
+                <Tooltip formatter={(val, name) =>
+                  name === "employmentRate" ? [`${val}%`, "Employment Rate"] : [val, name === "employed" ? "Employed" : "Total"]
+                } />
                 <Line type="monotone" dataKey="employed"       stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} name="employed" />
                 <Line type="monotone" dataKey="employmentRate" stroke="#16a34a" strokeWidth={2} dot={{ r: 3 }} strokeDasharray="4 2" name="employmentRate" />
               </LineChart>
@@ -321,24 +417,17 @@ function FacultyAdminDashboard({ profile }) {
           <h2 className="font-semibold text-gray-900 mb-1">Employment Rate by Program</h2>
           <p className="text-xs text-gray-500 mb-4">Top programs ranked by employment outcome</p>
           {topPrograms.length === 0 ? (
-            <div className="flex items-center justify-center h-48 text-gray-400 text-sm">
-              No program data yet
-            </div>
+            <div className="flex items-center justify-center h-48 text-gray-400 text-sm">No program data yet</div>
           ) : (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={topPrograms} margin={{ top: 4, right: 16, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis
-                  dataKey="program"
-                  tick={{ fontSize: 10 }}
-                  tickFormatter={(v) => v.replace("BS ", "").replace("Bachelor of Science in ", "")}
-                />
+                <XAxis dataKey="program" tick={{ fontSize: 10 }}
+                  tickFormatter={(v) => v.replace("BS ", "").replace("Bachelor of Science in ", "")} />
                 <YAxis tick={{ fontSize: 11 }} domain={[0, 100]} unit="%" />
                 <Tooltip formatter={(v) => [`${v}%`, "Employment Rate"]} />
                 <Bar dataKey="employmentRate" radius={[4, 4, 0, 0]}>
-                  {topPrograms.map((_, i) => (
-                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                  ))}
+                  {topPrograms.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -392,7 +481,12 @@ function FacultyAdminDashboard({ profile }) {
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-gray-900">Announcements</h2>
-            <Bell size={16} className="text-gray-400" />
+            <button
+              onClick={() => setShowModal(true)}
+              className="btn-primary flex items-center gap-1.5 text-xs py-1.5 px-3"
+            >
+              <Plus size={13} /> New Announcement
+            </button>
           </div>
           {announcements.length === 0 ? (
             <p className="text-gray-400 text-sm text-center py-6">No announcements yet.</p>
@@ -400,8 +494,11 @@ function FacultyAdminDashboard({ profile }) {
             <div className="divide-y divide-gray-100">
               {announcements.map((a) => (
                 <div key={a.id} className="py-3">
-                  <p className="text-sm font-medium text-gray-900">{a.title}</p>
-                  <p className="text-xs text-gray-500 mt-1 line-clamp-2">{a.content}</p>
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <p className="text-sm font-medium text-gray-900">{a.title}</p>
+                    <CategoryBadge category={a.category} />
+                  </div>
+                  <p className="text-xs text-gray-500 line-clamp-2">{a.content}</p>
                   <p className="text-xs text-gray-400 mt-1">
                     {formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
                   </p>
@@ -411,6 +508,17 @@ function FacultyAdminDashboard({ profile }) {
           )}
         </div>
       </div>
+
+      {/* Announcement Modal */}
+      {showModal && (
+        <AnnouncementModal
+          onClose={() => setShowModal(false)}
+          onCreated={(newAnnouncement) => {
+            setAnnouncements((prev) => [newAnnouncement, ...prev]);
+            setShowModal(false);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -421,18 +529,10 @@ function StudentDashboard({ profile }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    import("../services/supabase").then(({ supabase }) => {
-      supabase
-        .from("announcements")
-        .select("id, title, content, created_at")
-        .eq("is_published", true)
-        .order("created_at", { ascending: false })
-        .limit(10)
-        .then(({ data }) => {
-          setAnnouncements(data || []);
-          setLoading(false);
-        });
-    });
+    api.get("/announcements?limit=10")
+      .then(({ data }) => setAnnouncements(data || []))
+      .catch(console.error)
+      .finally(() => setLoading(false));
   }, []);
 
   if (loading) {
@@ -465,7 +565,10 @@ function StudentDashboard({ profile }) {
           <div className="divide-y divide-gray-100">
             {announcements.map((a) => (
               <div key={a.id} className="py-4">
-                <p className="text-sm font-medium text-gray-900">{a.title}</p>
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <p className="text-sm font-medium text-gray-900">{a.title}</p>
+                  <CategoryBadge category={a.category} />
+                </div>
                 <p className="text-sm text-gray-500 mt-1 leading-relaxed">{a.content}</p>
                 <p className="text-xs text-gray-400 mt-2">
                   {formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}

@@ -14,6 +14,7 @@ import messageRoutes from "./routes/messages.js";
 import analyticsRoutes from "./routes/analytics.js";
 import feedbackRoutes from "./routes/feedback.js";
 import messageRequestRoutes from "./routes/messageRequests.js";
+import announcementRoutes from "./routes/announcements.js";
 
 dotenv.config({ path: "../.env" });
 
@@ -44,6 +45,7 @@ app.use("/api/messages", messageRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/message-requests", messageRequestRoutes);
+app.use("/api/announcements", announcementRoutes);
 
 // Health check
 app.get("/api/health", (req, res) => {
