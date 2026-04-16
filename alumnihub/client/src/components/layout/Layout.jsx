@@ -15,7 +15,7 @@ const navItems = [
   { to: "/career-prediction", icon: TrendingUp,      label: "Career Prediction",  roles: ["faculty", "admin"] },
   { to: "/reports",           icon: BarChart3,       label: "Reports",            roles: ["faculty", "admin"] },
   { to: "/curriculum-impact", icon: GraduationCap,   label: "Curriculum Impact",  roles: ["faculty", "admin"] },
-  { to: "/settings",          icon: Settings,        label: "Settings",           roles: ["alumni", "faculty", "admin"] },
+  { to: "/settings",          icon: Settings,        label: "Settings",           roles: ["alumni", "student", "faculty", "admin"] },
 ];
 
 export default function Layout() {

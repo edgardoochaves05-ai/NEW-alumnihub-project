@@ -31,7 +31,7 @@ function Toast({ message, type }) {
 
 export default function SettingsPage() {
   const { profile, refreshProfile } = useAuth();
-  const isAlumni = profile?.role === "alumni";
+  const isAlumni = profile?.role === "alumni" || profile?.role === "student";
 
   // Privacy
   const [isPrivate, setIsPrivate] = useState(false);

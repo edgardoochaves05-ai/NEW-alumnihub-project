@@ -87,11 +87,11 @@ function AppRoutes() {
           }
         />
 
-        {/* Settings — Alumni, Faculty, and Admin */}
+        {/* Settings — All roles */}
         <Route
           path="settings"
           element={
-            <ProtectedRoute allowedRoles={["alumni", "faculty", "admin"]}>
+            <ProtectedRoute allowedRoles={["alumni", "student", "faculty", "admin"]}>
               <SettingsPage />
             </ProtectedRoute>
           }
