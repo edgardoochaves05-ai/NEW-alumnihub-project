@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
 import { supabase } from "../services/supabase";
@@ -10,7 +10,7 @@ import {
   Linkedin, Edit2, Save, X, Plus, Trash2, Loader2,
   CheckCircle, Lock, Unlock, Tag, Calendar, Building2,
   Award, BookOpen, Star, ChevronDown, ChevronUp, Upload,
-  FileText, Camera, Eye, EyeOff, ExternalLink,
+  FileText, Camera, Eye, EyeOff, ExternalLink, Send, MessageCircle,
 } from "lucide-react";
 
 // ── Constants ──────────────────────────────────────────────────
@@ -310,6 +310,7 @@ export default function ProfilePage() {
   const { id: paramId } = useParams();
   const { user, profile: authProfile, refreshProfile } = useAuth();
 
+  const navigate = useNavigate();
   const isOwnProfile = !paramId || paramId === user?.id;
   const profileId = paramId || user?.id;
 
@@ -338,6 +339,13 @@ export default function ProfilePage() {
   const [avatarFile, setAvatarFile]       = useState(null);
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  // Messaging
+  const [msgModal, setMsgModal]   = useState(false);
+  const [msgContent, setMsgContent] = useState("");
+  const [sendingMsg, setSendingMsg] = useState(false);
+  const [msgError, setMsgError]   = useState("");
+  const [msgSent, setMsgSent]     = useState(false);
 
   // CV Upload
   const fileInputRef = useRef(null);
@@ -496,6 +504,37 @@ export default function ProfilePage() {
     setSaveError("");
   }
 
+  // ── Messaging ──
+  async function handleSendMessage() {
+    setSendingMsg(true);
+    setMsgError("");
+    try {
+      if (profile.is_private) {
+        // Private profile → send a message request (goes to their Requests inbox)
+        await api.post("/message-requests", {
+          recipientId: profileId,
+          message: msgContent.trim() || undefined,
+        });
+      } else {
+        // Public profile → create conversation and deliver directly to their Inbox
+        await api.post("/messages", {
+          recipientId: profileId,
+          content: msgContent.trim(),
+        });
+      }
+      setMsgSent(true);
+      setMsgContent("");
+      setTimeout(() => {
+        setMsgModal(false);
+        setMsgSent(false);
+      }, 2000);
+    } catch (err) {
+      setMsgError(err.response?.data?.error || "Failed to send.");
+    } finally {
+      setSendingMsg(false);
+    }
+  }
+
   // ── Milestones ──
   function openAddMilestone() {
     setMilestoneForm(initMilestoneForm());
@@ -593,6 +632,8 @@ export default function ProfilePage() {
   const showAlumniSections  = profile.role === "alumni" || profile.role === "student";
   const showProfessionalInfo = profile.role !== "student";
   const showMilestones       = profile.role === "alumni";
+  // True when viewing someone else's private profile — hides all detail sections
+  const isPrivateOther = !isOwnProfile && !!profile.is_private;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -700,6 +741,17 @@ export default function ProfilePage() {
               )}
             </div>
           )}
+
+          {/* Message button (other users' profiles, non-admin only) */}
+          {!isOwnProfile && authProfile?.role !== "admin" && (
+            <button
+              onClick={() => { setMsgModal(true); setMsgError(""); setMsgSent(false); }}
+              className="btn-primary flex items-center gap-2 text-sm flex-shrink-0"
+            >
+              <MessageCircle size={14} />
+              {profile.is_private ? "Send Request" : "Message"}
+            </button>
+          )}
         </div>
 
         {saveError && (
@@ -717,6 +769,27 @@ export default function ProfilePage() {
           </div>
         )}
       </div>
+
+      {/* ── Private profile wall ── */}
+      {isPrivateOther ? (
+        <div className="card text-center py-16">
+          <Lock size={40} className="mx-auto mb-4 text-gray-300" />
+          <h3 className="font-semibold text-gray-700 mb-1">This account is private</h3>
+          <p className="text-sm text-gray-400 max-w-xs mx-auto leading-relaxed">
+            This user has chosen to keep their profile private.
+            Send them a message request to connect.
+          </p>
+          {authProfile?.role !== "admin" && (
+            <button
+              onClick={() => { setMsgModal(true); setMsgError(""); setMsgSent(false); }}
+              className="mt-5 btn-primary inline-flex items-center gap-2 text-sm"
+            >
+              <MessageCircle size={14} /> Send Message Request
+            </button>
+          )}
+        </div>
+      ) : (
+        <>
 
       {/* ── Personal Information ── */}
       <div className="card">
@@ -905,6 +978,82 @@ export default function ProfilePage() {
         onConfirm={confirmDeleteMilestone}
         onCancel={() => setConfirmDelete({ open: false, id: null })}
       />
+
+        </>
+      )}
+
+      {/* ── Message / Request Modal ── */}
+      {msgModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          onClick={() => setMsgModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+              <h3 className="font-semibold text-gray-900">
+                {profile.is_private
+                  ? `Send Message Request to ${profile.first_name}`
+                  : `Message ${profile.first_name}`}
+              </h3>
+              <button onClick={() => setMsgModal(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg">
+                <X size={18}/>
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {profile.is_private && (
+                <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+                  <Lock size={14} className="mt-0.5 flex-shrink-0"/>
+                  <p>This user has a private profile. Your message will be sent as a request — they must accept before you can chat.</p>
+                </div>
+              )}
+
+              {msgSent ? (
+                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+                  <CheckCircle size={15}/>
+                  {profile.is_private ? "Message request sent!" : "Message sent!"}
+                </div>
+              ) : (
+                <>
+                  {msgError && (
+                    <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg">
+                      {msgError}
+                    </div>
+                  )}
+                  <div>
+                    <label className="label">
+                      {profile.is_private ? "Message (optional)" : "Message *"}
+                    </label>
+                    <textarea
+                      value={msgContent}
+                      onChange={e => setMsgContent(e.target.value)}
+                      rows={4}
+                      className="input-field resize-none"
+                      placeholder={profile.is_private
+                        ? "Introduce yourself or explain why you'd like to connect..."
+                        : "Write your message..."}
+                    />
+                  </div>
+                  <div className="flex gap-3">
+                    <button onClick={() => setMsgModal(false)} className="btn-secondary flex-1 text-sm">
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSendMessage}
+                      disabled={sendingMsg || (!profile.is_private && !msgContent.trim())}
+                      className="btn-primary flex-1 flex items-center justify-center gap-2 text-sm"
+                    >
+                      {sendingMsg && <Loader2 size={14} className="animate-spin"/>}
+                      <Send size={14}/>
+                      {profile.is_private ? "Send Request" : "Send Message"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
