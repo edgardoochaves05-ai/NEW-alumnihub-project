@@ -45,7 +45,12 @@ function JobCard({ job, matchScore, onClick }) {
           <Briefcase size={18} className="text-blue-600"/>
         </div>
       </div>
-      {job.salary_range && <p className="text-xs text-green-700 font-medium mt-3">₱ {job.salary_range}</p>}
+      {(job.salary_min || job.salary_max) && (
+        <p className="text-xs text-green-700 font-medium mt-3">
+          ₱ {job.salary_min ? Number(job.salary_min).toLocaleString() : "?"}
+          {job.salary_max ? ` – ₱ ${Number(job.salary_max).toLocaleString()}` : "+"}
+        </p>
+      )}
       <p className="text-xs text-gray-400 mt-2">{formatDistanceToNow(new Date(job.created_at), { addSuffix: true })}</p>
     </div>
   );
@@ -74,7 +79,12 @@ function JobDetailModal({ job, matchScore, onClose }) {
             {job.experience_level && <span className="flex items-center gap-1.5"><GraduationCap size={14}/>{job.experience_level} level</span>}
             {job.expires_at     && <span className="flex items-center gap-1.5"><Calendar size={14}/>Deadline: {new Date(job.expires_at).toLocaleDateString()}</span>}
           </div>
-          {job.salary_range && <p className="text-sm font-semibold text-green-700">Salary: ₱ {job.salary_range}</p>}
+          {(job.salary_min || job.salary_max) && (
+            <p className="text-sm font-semibold text-green-700">
+              Salary: ₱ {job.salary_min ? Number(job.salary_min).toLocaleString() : "?"}
+              {job.salary_max ? ` – ₱ ${Number(job.salary_max).toLocaleString()}` : "+"}
+            </p>
+          )}
           {job.description && (
             <div>
               <h4 className="text-sm font-semibold text-gray-800 mb-2">Description</h4>
@@ -160,8 +170,12 @@ function PostJobModal({ onClose, onCreated }) {
               </select>
             </div>
             <div>
-              <label className="label">Salary Range</label>
-              <input name="salary_range" value={form.salary_range} onChange={handleChange} className="input-field" placeholder="e.g. 30,000 – 50,000"/>
+              <label className="label">Min Salary (₱)</label>
+              <input name="salary_min" type="number" min="0" value={form.salary_min} onChange={handleChange} className="input-field" placeholder="e.g. 30000"/>
+            </div>
+            <div>
+              <label className="label">Max Salary (₱)</label>
+              <input name="salary_max" type="number" min="0" value={form.salary_max} onChange={handleChange} className="input-field" placeholder="e.g. 50000"/>
             </div>
             <div>
               <label className="label">Application Deadline</label>
