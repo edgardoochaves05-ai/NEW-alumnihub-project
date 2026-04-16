@@ -76,7 +76,7 @@ router.get("/conversations", authenticate, async (req, res, next) => {
 
     // Filter: unread only
     if (unread_only === "true") {
-      formatted = formatted.filter((conv) => conv.unreadCount > 0);
+      formatted = formatted.filter((conv) => conv.unread_count > 0);
     }
 
     res.json(formatted);

@@ -7,11 +7,13 @@ AlumniHub follows a three-tier architecture: Presentation, Logic, and Data.
 ### Presentation Tier (Frontend)
 The React.js single-page application handles all user-facing interactions. It communicates with the Logic Tier via REST API calls and directly with Supabase for authentication and realtime subscriptions.
 
-**Alumni can:** Update profile, upload CV, view career predictions, view matched jobs, send/receive messages, manage message requests, provide feedback.
+**Alumni can:** Update profile, upload CV, view career predictions, view matched jobs, send/receive messages, manage message requests, browse Faculty Directory, provide feedback. Cannot view Alumni or Student directories.
 
-**Faculty can:** All alumni features plus view alumni directory, access analytics dashboard, view reports, view curriculum impact analytics.
+**Students can:** Update profile, browse jobs, send/receive messages, browse Faculty Directory. Cannot view Alumni or Student directories.
 
-**Admin can:** View alumni directory, manage alumni records, access analytics, manage content (announcements, jobs), handle feedback, system monitoring. Admin does NOT have a personal profile.
+**Faculty can:** All of the above plus view Alumni Directory, Student Directory, and Faculty Directory; access analytics dashboard, reports, and curriculum impact analytics. Faculty always see full profiles regardless of privacy settings, and their messages always go directly to Inbox (never routed to Message Requests).
+
+**Admin can:** View Alumni Directory, Student Directory, and Faculty Directory; manage alumni records, access analytics, manage content (announcements, jobs), handle feedback, system monitoring. Admin always sees full profiles regardless of privacy settings. Admin does NOT have a personal profile or inbox.
 
 ### Logic Tier (Backend)
 The Node.js + Express.js server contains all business logic, API endpoints, authentication middleware, and the AI analytics module. It uses the Supabase service role key for admin-level database access.
@@ -56,6 +58,6 @@ User Browser
 2. **JWT Verification** — Server middleware validates tokens on every API request
 3. **Role-Based Access** — Server middleware checks user role against allowed roles per endpoint
 4. **Row-Level Security** — Database-level policies enforce data access rules even if API is bypassed
-5. **Privacy System** — Alumni can make profiles private, requiring message requests before contact
+5. **Privacy System** — Alumni/students can make profiles private; faculty and admin always bypass the privacy wall; faculty also bypass the message request flow
 6. **Rate Limiting** — 100 requests per 15 minutes per IP
 7. **Helmet** — Security headers (XSS protection, content type sniffing, etc.)

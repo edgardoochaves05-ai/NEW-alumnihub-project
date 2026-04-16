@@ -24,6 +24,7 @@ System administrators who oversee platform operations, manage content, generate 
 | **My Profile**             | ✅ | ✅ | ✅ | ❌ |
 | **Alumni Directory**       | ❌ | ❌ | ✅ | ✅ |
 | **Student Directory**      | ❌ | ❌ | ✅ | ✅ |
+| **Faculty Directory**      | ✅ | ✅ | ✅ | ✅ |
 | **Jobs — View**            | ✅ | ✅ | ✅ | ✅ |
 | **Jobs — Post**            | ✅ | ✅ | ✅ | ✅ |
 | **Inbox / Messaging**      | ✅ | ✅ | ✅ | ❌ |
@@ -64,38 +65,42 @@ System administrators who oversee platform operations, manage content, generate 
 ### Student
 1. Dashboard *(Announcements only)*
 2. My Profile
-3. Jobs
-4. Inbox
-5. Settings
+3. Faculty Directory
+4. Jobs
+5. Inbox
+6. Settings
 
 ### Alumni
 1. Dashboard *(Personal stats, job matches, announcements)*
 2. My Profile
-3. Jobs
-4. Inbox
-5. Settings
+3. Faculty Directory
+4. Jobs
+5. Inbox
+6. Settings
 
 ### Faculty
 1. Dashboard *(Full analytics)*
 2. My Profile
 3. Alumni Directory
 4. Student Directory
-5. Jobs
-6. Inbox
-7. Career Prediction
-8. Reports
-9. Curriculum Impact
-10. Settings
+5. Faculty Directory
+6. Jobs
+7. Inbox
+8. Career Prediction
+9. Reports
+10. Curriculum Impact
+11. Settings
 
 ### Admin
 1. Dashboard *(Full analytics)*
 2. Alumni Directory
 3. Student Directory
-4. Jobs
-5. Career Prediction
-6. Reports
-7. Curriculum Impact
-8. Settings
+4. Faculty Directory
+5. Jobs
+6. Career Prediction
+7. Reports
+8. Curriculum Impact
+9. Settings
 
 ---
 
@@ -104,7 +109,8 @@ System administrators who oversee platform operations, manage content, generate 
 - **Students see Announcements only on Dashboard** — Students are not yet graduates, so employment analytics and alumni stats are not relevant to them.
 - **Students have no Professional Information section** — Students have not yet entered the workforce; that section is reserved for alumni who have career history to record.
 - **Students and Alumni can toggle privacy** — These are personal accounts representing individuals. Faculty and Admin profiles are institutional and should always be discoverable.
-- **Alumni cannot see directories** — The Alumni and Student directories are administrative tools for faculty/admin to manage and verify records. Alumni interact with peers through messaging and the job board.
+- **Alumni and Students cannot see Alumni/Student directories** — These are administrative tools for faculty/admin to manage and verify records. Alumni and students interact with peers through messaging and the job board.
+- **Faculty Directory is visible to all roles** — Faculty are institutional members whose contact information should be accessible to all users (students, alumni, faculty, and admin) for academic and professional networking purposes.
 - **Admin has no profile or inbox** — The Admin role represents the Alumni Office as an institution, not an individual. Admin accounts manage the system rather than participate in the network.
 - **Only Alumni have Career Milestones** — Milestone tracking is tied to post-graduation career progression, which is specific to alumni.
 - **Only Students and Alumni can upload CVs** — CV upload drives career milestone extraction and job matching, which applies to individuals seeking or progressing in careers.

@@ -49,11 +49,25 @@ GET /api/messages/conversations?search=Juan&program=BS+IS&unread_only=true
 ### Sending Messages
 - Type a message and send within an existing conversation
 - Start a new conversation by messaging from another user's profile
-- If the recipient is private, the "Send Message" button is replaced with "Send Message Request"
+- If the recipient is private and the sender is **not faculty**, the button becomes "Send Request" and routes to the message request flow
+- If the sender is **faculty**, the message always goes directly to the recipient's Inbox regardless of privacy setting
+
+## Conditional Message Routing
+
+When clicking the message button on a profile page, the destination depends on the recipient's privacy setting and the sender's role:
+
+| Sender Role | Recipient Privacy | Route |
+|-------------|------------------|-------|
+| Alumni / Student | Public | → Inbox (direct message) |
+| Alumni / Student | Private | → Message Request |
+| Faculty | Public | → Inbox (direct message) |
+| Faculty | Private | → Inbox (direct message, bypasses request flow) |
+
+The frontend calls `POST /api/messages` for direct messages and `POST /api/message-requests` for requests.
 
 ## Message Requests
 
-When an alumni's profile is set to private, other users (except faculty/admin) must send a message request before messaging them.
+When a profile is set to private, other alumni/students must send a message request before messaging them. Faculty are exempt from this requirement.
 
 ### Endpoints
 

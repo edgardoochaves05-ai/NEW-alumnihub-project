@@ -44,6 +44,19 @@ GET /api/jobs?search=developer&industry=Information+Technology&job_type=full-tim
 | is_active | BOOLEAN | Whether the listing is visible |
 | expires_at | TIMESTAMPTZ | Optional expiration date |
 
+## Job Card — Posted By
+
+Each job card and job detail modal displays the name of the user who posted the listing. The poster's name is a clickable link that navigates to their profile page, allowing other users to contact the poster with questions.
+
+The `posted_by` UUID is joined to the `profiles` table when fetching jobs so that `first_name`, `last_name`, and `avatar_url` are returned alongside the listing:
+
+```
+GET /api/jobs  →  each job includes:
+  poster: { id, first_name, last_name, avatar_url, role }
+```
+
+The link uses `e.stopPropagation()` on job cards to prevent the detail modal from opening when clicking the poster's name.
+
 ## AI Smart Job Matching
 
 The Smart Job Matching engine ranks job listings by relevance to each alumni's profile using a multi-factor weighted scoring system.
