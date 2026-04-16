@@ -72,7 +72,7 @@ function JobDetailModal({ job, matchScore, onClose }) {
             {job.job_type       && <span className="flex items-center gap-1.5"><Clock size={14}/>{job.job_type}</span>}
             {job.industry       && <span className="flex items-center gap-1.5"><Briefcase size={14}/>{job.industry}</span>}
             {job.experience_level && <span className="flex items-center gap-1.5"><GraduationCap size={14}/>{job.experience_level} level</span>}
-            {job.deadline       && <span className="flex items-center gap-1.5"><Calendar size={14}/>Deadline: {new Date(job.deadline).toLocaleDateString()}</span>}
+            {job.expires_at     && <span className="flex items-center gap-1.5"><Calendar size={14}/>Deadline: {new Date(job.expires_at).toLocaleDateString()}</span>}
           </div>
           {job.salary_range && <p className="text-sm font-semibold text-green-700">Salary: ₱ {job.salary_range}</p>}
           {job.description && (
@@ -100,7 +100,7 @@ function JobDetailModal({ job, matchScore, onClose }) {
 }
 
 function PostJobModal({ onClose, onCreated }) {
-  const [form, setForm] = useState({ title:"", company:"", location:"", industry:"", job_type:"full-time", experience_level:"entry", salary_range:"", description:"", requirements:"", application_url:"", deadline:"" });
+  const [form, setForm] = useState({ title:"", company:"", location:"", industry:"", job_type:"full-time", experience_level:"entry", salary_min:"", salary_max:"", description:"", requirements:"", application_url:"", expires_at:"" });
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState("");
 
@@ -165,7 +165,7 @@ function PostJobModal({ onClose, onCreated }) {
             </div>
             <div>
               <label className="label">Application Deadline</label>
-              <input name="deadline" type="date" value={form.deadline} onChange={handleChange} className="input-field"/>
+              <input name="expires_at" type="date" value={form.expires_at} onChange={handleChange} className="input-field"/>
             </div>
             <div className="col-span-2">
               <label className="label">Application URL</label>

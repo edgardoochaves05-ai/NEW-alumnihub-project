@@ -67,9 +67,24 @@ router.get("/:id", authenticate, async (req, res, next) => {
 // ── Create job ──
 router.post("/", authenticate, async (req, res, next) => {
   try {
-    const job = { ...req.body, posted_by: req.user.id };
-    const { data, error } = await supabase.from("job_listings").insert(job).select().single();
+    const {
+      title, company, description, requirements, location,
+      job_type, industry, salary_min, salary_max, salary_currency,
+      required_skills, experience_level, application_url, application_email, expires_at,
+    } = req.body;
 
+    const job = {
+      posted_by: req.user.id,
+      title, company, description, requirements, location,
+      job_type, industry, experience_level, application_url, application_email,
+      ...(salary_currency && { salary_currency }),
+      ...(salary_min !== "" && salary_min != null && { salary_min: parseFloat(salary_min) }),
+      ...(salary_max !== "" && salary_max != null && { salary_max: parseFloat(salary_max) }),
+      ...(required_skills && { required_skills }),
+      ...(expires_at && { expires_at }),
+    };
+
+    const { data, error } = await supabase.from("job_listings").insert(job).select().single();
     if (error) throw error;
     res.status(201).json(data);
   } catch (err) {
