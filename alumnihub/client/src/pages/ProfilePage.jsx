@@ -1,15 +1,15 @@
 import { useEffect, useState, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
 import { supabase } from "../services/supabase";
 import { format } from "date-fns";
 import ConfirmDialog from "../components/ConfirmDialog";
 import {
-  User, Briefcase, GraduationCap, MapPin, Phone, Mail,
+  User, Briefcase, GraduationCap, MapPin,
   Linkedin, Edit2, Save, X, Plus, Trash2, Loader2,
-  CheckCircle, Lock, Unlock, Tag, Calendar, Building2,
-  Award, BookOpen, Star, ChevronDown, ChevronUp, Upload,
+  CheckCircle, Lock, Tag, Calendar,
+  Award, BookOpen, Star, ChevronUp, Upload,
   FileText, Camera, Eye, EyeOff, ExternalLink, Send, MessageCircle,
 } from "lucide-react";
 
@@ -310,7 +310,6 @@ export default function ProfilePage() {
   const { id: paramId } = useParams();
   const { user, profile: authProfile, refreshProfile } = useAuth();
 
-  const navigate = useNavigate();
   const isOwnProfile = !paramId || paramId === user?.id;
   const profileId = paramId || user?.id;
 
@@ -509,14 +508,16 @@ export default function ProfilePage() {
     setSendingMsg(true);
     setMsgError("");
     try {
-      if (profile.is_private) {
-        // Private profile → send a message request (goes to their Requests inbox)
+      // Faculty bypass: even for private profiles, go straight to inbox
+      const sendAsRequest = profile.is_private && authProfile?.role !== "faculty";
+      if (sendAsRequest) {
+        // Private profile (non-faculty sender) → message request
         await api.post("/message-requests", {
           recipientId: profileId,
           message: msgContent.trim() || undefined,
         });
       } else {
-        // Public profile → create conversation and deliver directly to their Inbox
+        // Public profile OR faculty sender → deliver directly to inbox
         await api.post("/messages", {
           recipientId: profileId,
           content: msgContent.trim(),
@@ -632,8 +633,10 @@ export default function ProfilePage() {
   const showAlumniSections  = profile.role === "alumni" || profile.role === "student";
   const showProfessionalInfo = profile.role !== "student";
   const showMilestones       = profile.role === "alumni";
-  // True when viewing someone else's private profile — hides all detail sections
-  const isPrivateOther = !isOwnProfile && !!profile.is_private;
+  // Admin and Faculty always see full profiles regardless of privacy setting
+  const isPrivateOther = !isOwnProfile && !!profile.is_private && !["admin", "faculty"].includes(authProfile?.role);
+  // For messaging: Faculty bypass privacy → message goes straight to inbox, not requests
+  const isMsgRequest = !isOwnProfile && !!profile.is_private && authProfile?.role !== "faculty";
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -749,7 +752,7 @@ export default function ProfilePage() {
               className="btn-primary flex items-center gap-2 text-sm flex-shrink-0"
             >
               <MessageCircle size={14} />
-              {profile.is_private ? "Send Request" : "Message"}
+              {isMsgRequest ? "Send Request" : "Message"}
             </button>
           )}
         </div>
@@ -990,7 +993,7 @@ export default function ProfilePage() {
             onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-5 border-b border-gray-100">
               <h3 className="font-semibold text-gray-900">
-                {profile.is_private
+                {isMsgRequest
                   ? `Send Message Request to ${profile.first_name}`
                   : `Message ${profile.first_name}`}
               </h3>
@@ -1001,7 +1004,7 @@ export default function ProfilePage() {
             </div>
 
             <div className="p-5 space-y-4">
-              {profile.is_private && (
+              {isMsgRequest && (
                 <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
                   <Lock size={14} className="mt-0.5 flex-shrink-0"/>
                   <p>This user has a private profile. Your message will be sent as a request — they must accept before you can chat.</p>
@@ -1011,7 +1014,7 @@ export default function ProfilePage() {
               {msgSent ? (
                 <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
                   <CheckCircle size={15}/>
-                  {profile.is_private ? "Message request sent!" : "Message sent!"}
+                  {isMsgRequest ? "Message request sent!" : "Message sent!"}
                 </div>
               ) : (
                 <>
