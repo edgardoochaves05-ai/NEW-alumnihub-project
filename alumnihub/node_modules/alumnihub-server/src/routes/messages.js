@@ -50,10 +50,10 @@ router.get("/conversations", authenticate, async (req, res, next) => {
 
       return {
         id: conv.id,
-        participants: otherParticipants,
-        lastMessage,
-        unreadCount,
-        updatedAt: conv.updated_at,
+        other_participant: otherParticipants[0] || null,
+        last_message: lastMessage?.content || null,
+        last_message_at: lastMessage?.created_at || conv.updated_at,
+        unread_count: unreadCount,
       };
     });
 
