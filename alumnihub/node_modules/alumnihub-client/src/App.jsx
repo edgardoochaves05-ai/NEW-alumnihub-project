@@ -75,8 +75,15 @@ function AppRoutes() {
           }
         />
 
-        {/* Faculty Directory — All roles */}
-        <Route path="faculty-directory" element={<FacultyDirectoryPage />} />
+        {/* Faculty Directory — Admin only */}
+        <Route
+          path="faculty-directory"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <FacultyDirectoryPage />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Jobs — all roles */}
         <Route path="jobs" element={<JobsPage />} />
