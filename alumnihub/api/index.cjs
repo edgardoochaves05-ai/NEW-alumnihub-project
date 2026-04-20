@@ -10,7 +10,7 @@ const loadApp = async () => {
 };
 
 // Vercel serverless function handler
-export default async (req, res) => {
+module.exports = async (req, res) => {
   try {
     const expressApp = await loadApp();
     return expressApp(req, res);
