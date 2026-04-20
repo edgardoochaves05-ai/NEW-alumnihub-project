@@ -1,6 +1,6 @@
 let app;
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   try {
     if (!app) {
       const mod = await import('../server/src/app.js');
@@ -10,4 +10,4 @@ export default async function handler(req, res) {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-}
+};
