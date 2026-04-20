@@ -6,7 +6,7 @@
     "NODE_ENV": "production"
   },
   "routes": [
-    { "src": "/api/(.*)", "dest": "/api/index.cjs" },
+    { "src": "/api/.*", "dest": "/api/index.cjs" },
     { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/index.html" }
   ]
