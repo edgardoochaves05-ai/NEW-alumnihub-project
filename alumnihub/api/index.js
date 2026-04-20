@@ -1,8 +1,4 @@
-// Vercel Serverless Handler - Apr 20 2026
-export default async function handler(req, res) {
+export default function handler(req, res) {
   res.setHeader('Content-Type', 'application/json');
-  res.status(200).json({
-    status: 'ok',
-    timestamp: new Date().toISOString()
-  });
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 }
