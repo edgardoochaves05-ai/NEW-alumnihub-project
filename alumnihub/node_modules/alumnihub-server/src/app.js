@@ -29,6 +29,9 @@ dotenv.config();
 
 const app = express();
 
+// Trust proxy for Vercel and other reverse proxies
+app.set('trust proxy', 1);
+
 // Log startup
 console.log("✓ Express app created");
 console.log("✓ Supabase configured:", isSupabaseConfigured());
