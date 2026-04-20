@@ -3,11 +3,12 @@ import dotenv from "dotenv";
 
 dotenv.config({ path: "../.env" });
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
+// Use SUPABASE_URL for server (not VITE_ prefix), fall back to VITE_ for local dev
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseServiceKey) {
-  console.error("⚠️  Missing Supabase env vars — set VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your .env or Vercel dashboard.");
+  console.error("⚠️  Missing Supabase env vars — set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your .env or Vercel dashboard.");
 }
 
 // Server-side client uses service role key for admin access
