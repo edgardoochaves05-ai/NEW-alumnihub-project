@@ -1,8 +1,11 @@
+const dotenv = require("dotenv");
+// Load env vars before any other imports so config modules see them
+dotenv.config();
+
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
-const dotenv = require("dotenv");
 const rateLimit = require("express-rate-limit");
 
 // Routes - import them directly
@@ -22,9 +25,6 @@ console.log("[APP] All routes imported successfully");
 const { supabase, isSupabaseConfigured } = require("./config/supabase.js");
 
 console.log("[APP] Config imported");
-
-// Load environment variables
-dotenv.config();
 
 
 const app = express();
