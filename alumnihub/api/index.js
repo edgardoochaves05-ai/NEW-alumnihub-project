@@ -1,9 +1,8 @@
-// Test handler - no dependencies
-export default (req, res) => {
-  res.json({ 
-    status: 'test',
+export default async function handler(req, res) {
+  res.setHeader('Content-Type', 'application/json');
+  res.status(200).json({ 
+    ok: true,
     method: req.method,
-    path: req.url,
-    timestamp: new Date().toISOString()
+    url: req.url
   });
-};
+}
