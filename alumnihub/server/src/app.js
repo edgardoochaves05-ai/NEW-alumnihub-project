@@ -17,7 +17,7 @@ import messageRequestRoutes from "./routes/messageRequests.js";
 import announcementRoutes from "./routes/announcements.js";
 
 // Config
-import { isSupabaseConfigured } from "./config/supabase.js";
+import { supabase, isSupabaseConfigured } from "./config/supabase.js";
 
 console.log("[APP] All modules imported successfully");
 
@@ -72,23 +72,40 @@ app.get("/api/health", (req, res) => {
     status: "ok", 
     timestamp: new Date().toISOString(),
     supabaseConfigured: isSupabaseConfigured(),
+    environment: process.env.NODE_ENV,
+    supabaseUrl: process.env.SUPABASE_URL ? "✓ Set" : "✗ Missing",
+    supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY ? "✓ Set" : "✗ Missing",
+    clientUrl: process.env.CLIENT_URL || "not set",
   });
 });
 
 // ── Error Handler ──
 app.use((err, req, res, next) => {
-  console.error("Server error:", err);
+  console.error(`[ERROR] ${req.method} ${req.path}:`, err.message);
+  console.error("Stack:", err.stack);
   
   // Check if Supabase is not configured
   if (!isSupabaseConfigured()) {
     return res.status(500).json({
-      error: "Database configuration error. Please ensure environment variables are set.",
-      details: "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are missing",
+      error: "Database configuration error",
+      details: "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing",
+      supabaseUrl: Boolean(process.env.SUPABASE_URL),
+      supabaseServiceKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+    });
+  }
+  
+  // If supabase is null, that's the problem
+  if (!supabase) {
+    return res.status(500).json({
+      error: "Database client not initialized",
+      details: "Supabase client is null despite env vars being set",
     });
   }
   
   res.status(err.status || 500).json({
     error: process.env.NODE_ENV === "development" ? err.message : "Internal server error",
+    path: req.path,
+    method: req.method,
   });
 });
 

@@ -19,6 +19,7 @@ router.use((req, res, next) => {
 // ── GET /api/announcements ─────────────────────────────────────
 router.get("/", authenticate, async (req, res, next) => {
   try {
+    console.log("[ANNOUNCEMENTS] GET / - user:", req.user?.id);
     const { limit = 10 } = req.query;
     const { data, error } = await supabase
       .from("announcements")
@@ -27,9 +28,14 @@ router.get("/", authenticate, async (req, res, next) => {
       .order("created_at", { ascending: false })
       .limit(parseInt(limit));
 
-    if (error) throw error;
+    if (error) {
+      console.error("[ANNOUNCEMENTS] Query error:", error);
+      throw error;
+    }
+    console.log("[ANNOUNCEMENTS] Returning", data?.length || 0, "announcements");
     res.json(data);
   } catch (err) {
+    console.error("[ANNOUNCEMENTS] Error:", err);
     next(err);
   }
 });
