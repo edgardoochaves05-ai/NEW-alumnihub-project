@@ -48,6 +48,19 @@ app.use((req, res, next) => {
   next();
 });
 
+// ── Health Check (Public) ──
+app.get("/api/health", (req, res) => {
+  res.json({ 
+    status: "ok", 
+    timestamp: new Date().toISOString(),
+    supabaseConfigured: isSupabaseConfigured(),
+    environment: process.env.NODE_ENV,
+    supabaseUrl: process.env.SUPABASE_URL ? "✓ Set" : "✗ Missing",
+    supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY ? "✓ Set" : "✗ Missing",
+    clientUrl: process.env.CLIENT_URL || "not set",
+  });
+});
+
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -69,19 +82,6 @@ app.use("/api/message-requests", messageRequestRoutes);
 app.use("/api/announcements", announcementRoutes);
 
 console.log("[APP] Routes registered");
-
-// Health check
-app.get("/api/health", (req, res) => {
-  res.json({ 
-    status: "ok", 
-    timestamp: new Date().toISOString(),
-    supabaseConfigured: isSupabaseConfigured(),
-    environment: process.env.NODE_ENV,
-    supabaseUrl: process.env.SUPABASE_URL ? "✓ Set" : "✗ Missing",
-    supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY ? "✓ Set" : "✗ Missing",
-    clientUrl: process.env.CLIENT_URL || "not set",
-  });
-});
 
 // ── Error Handler ──
 app.use((err, req, res, next) => {
