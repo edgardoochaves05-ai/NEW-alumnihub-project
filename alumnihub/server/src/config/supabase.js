@@ -18,6 +18,8 @@ export const supabase = supabaseUrl && supabaseServiceKey
     })
   : null;
 
+export const isSupabaseConfigured = () => Boolean(supabaseUrl && supabaseServiceKey);
+
 // Create a client scoped to a specific user's JWT (for RLS)
 export function createUserClient(accessToken) {
   const anonKey = process.env.VITE_SUPABASE_ANON_KEY;

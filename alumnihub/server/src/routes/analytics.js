@@ -11,6 +11,16 @@ import { supabase } from "../config/supabase.js";
 
 const router = Router();
 
+// Check if Supabase is available before processing requests
+router.use((req, res, next) => {
+  if (!supabase) {
+    return res.status(500).json({
+      error: "Database service unavailable. Check server configuration.",
+    });
+  }
+  next();
+});
+
 // ── Dashboard Stats (Faculty/Admin) ──
 router.get("/dashboard", authenticate, authorize("faculty", "admin"), async (req, res, next) => {
   try {

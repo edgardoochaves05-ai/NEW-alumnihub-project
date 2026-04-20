@@ -16,6 +16,9 @@ import feedbackRoutes from "./routes/feedback.js";
 import messageRequestRoutes from "./routes/messageRequests.js";
 import announcementRoutes from "./routes/announcements.js";
 
+// Config
+import { isSupabaseConfigured } from "./config/supabase.js";
+
 dotenv.config({ path: "../.env" });
 
 const app = express();
@@ -51,12 +54,25 @@ app.use("/api/announcements", announcementRoutes);
 
 // Health check
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
+  res.json({ 
+    status: "ok", 
+    timestamp: new Date().toISOString(),
+    supabaseConfigured: isSupabaseConfigured(),
+  });
 });
 
 // ── Error Handler ──
 app.use((err, req, res, next) => {
   console.error("Server error:", err);
+  
+  // Check if Supabase is not configured
+  if (!isSupabaseConfigured()) {
+    return res.status(500).json({
+      error: "Database configuration error. Please ensure environment variables are set.",
+      details: "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are missing",
+    });
+  }
+  
   res.status(err.status || 500).json({
     error: process.env.NODE_ENV === "development" ? err.message : "Internal server error",
   });

@@ -6,6 +6,16 @@ const router = Router();
 
 const VALID_CATEGORIES = ["Event", "Career Fair", "Campus News", "Mentorship"];
 
+// Check if Supabase is available before processing requests
+router.use((req, res, next) => {
+  if (!supabase) {
+    return res.status(500).json({
+      error: "Database service unavailable. Check server configuration.",
+    });
+  }
+  next();
+});
+
 // ── GET /api/announcements ─────────────────────────────────────
 router.get("/", authenticate, async (req, res, next) => {
   try {
