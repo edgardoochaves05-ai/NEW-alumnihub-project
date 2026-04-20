@@ -7,8 +7,7 @@
     "NODE_ENV": "production"
   },
   "routes": [
-    { "src": "/api/health", "dest": "/api/index.cjs" },
-    { "src": "/api/(.*)", "dest": "/api/index.cjs" },
+    { "src": "/api/(.*)", "dest": "/api.cjs" },
     { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/index.html" }
   ]
