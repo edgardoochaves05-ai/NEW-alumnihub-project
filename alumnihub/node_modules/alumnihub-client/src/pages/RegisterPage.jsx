@@ -39,27 +39,33 @@ export default function RegisterPage() {
 
     setLoading(true);
     try {
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email: form.email,
-        password: form.password,
-        options: {
-          data: {
-            first_name: form.first_name,
-            last_name: form.last_name,
-            role: form.role,
-          },
-        },
+      // Use backend API instead of Supabase client auth
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: form.email,
+          password: form.password,
+          first_name: form.first_name,
+          last_name: form.last_name,
+          role: form.role,
+        }),
       });
 
-      if (signUpError) throw signUpError;
+      const data = await response.json();
 
-      // If email confirmation is disabled in Supabase, session is returned immediately
-      if (data.session) {
-        navigate("/dashboard");
-      } else {
-        // Email confirmation is enabled — inform the user
-        setError("Check your email for a confirmation link, then sign in.");
+      if (!response.ok) {
+        throw new Error(data.error || "Registration failed");
       }
+
+      // Sign in after successful registration
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: form.email,
+        password: form.password,
+      });
+
+      if (signInError) throw signInError;
+      navigate("/dashboard");
     } catch (err) {
       setError(err.message || "Registration failed.");
     } finally {
