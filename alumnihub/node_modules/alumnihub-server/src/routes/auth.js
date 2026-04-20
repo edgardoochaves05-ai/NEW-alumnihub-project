@@ -36,9 +36,13 @@ router.post("/register", async (req, res, next) => {
       email_confirm: true,
     });
 
-    if (error) throw error;
+    if (error) {
+      const status = error.status || error.statusCode || 400;
+      return res.status(status).json({ error: error.message });
+    }
     res.status(201).json({ message: "Account created successfully", user: data.user });
   } catch (err) {
+    console.error("[REGISTER] Unexpected error:", err.message);
     next(err);
   }
 });

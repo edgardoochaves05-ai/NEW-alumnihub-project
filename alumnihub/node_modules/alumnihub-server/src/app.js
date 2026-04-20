@@ -109,8 +109,8 @@ app.use((err, req, res, next) => {
     });
   }
   
-  res.status(err.status || 500).json({
-    error: process.env.NODE_ENV === "development" ? err.message : "Internal server error",
+  res.status(err.status || err.statusCode || 500).json({
+    error: err.message || "Internal server error",
     path: req.path,
     method: req.method,
   });
