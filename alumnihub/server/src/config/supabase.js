@@ -7,17 +7,21 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error("Missing Supabase environment variables. Check your .env file.");
+  console.error("⚠️  Missing Supabase env vars — set VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your .env or Vercel dashboard.");
 }
 
 // Server-side client uses service role key for admin access
-export const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
+export const supabase = supabaseUrl && supabaseServiceKey
+  ? createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+  : null;
 
 // Create a client scoped to a specific user's JWT (for RLS)
 export function createUserClient(accessToken) {
-  return createClient(supabaseUrl, process.env.VITE_SUPABASE_ANON_KEY, {
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !anonKey) return null;
+  return createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: `Bearer ${accessToken}` } },
   });
 }
