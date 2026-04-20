@@ -19,6 +19,8 @@ import announcementRoutes from "./routes/announcements.js";
 // Config
 import { isSupabaseConfigured } from "./config/supabase.js";
 
+console.log("[APP] All modules imported successfully");
+
 // Load environment variables - simple approach
 dotenv.config();
 
