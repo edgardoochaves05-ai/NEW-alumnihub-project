@@ -1,26 +1,39 @@
-let app;
+let expressApp;
 
-// Dynamically import app to handle CommonJS/ESM interop
-const loadApp = async () => {
-  if (!app) {
-    console.log("[API] Loading app from server/src/app.js");
-    const module = await import("../server/src/app.js");
-    app = module.default;
-    console.log("[API] App loaded successfully");
+// Load Express app
+async function initializeApp() {
+  if (!expressApp) {
+    try {
+      console.log('[API] Initializing Express app');
+      const mod = await import('../server/src/app.js');
+      expressApp = mod.default;
+      console.log('[API] Express app initialized');
+    } catch (err) {
+      console.error('[API] Failed to initialize app:', err);
+      throw err;
+    }
   }
-  return app;
-};
+  return expressApp;
+}
 
-// Vercel serverless function handler
+// Initialize on module load
+initializeApp().catch(err => {
+  console.error('[API] Initialization error:', err.message);
+});
+
+// Vercel serverless handler
 module.exports = async (req, res) => {
   try {
-    console.log("[API HANDLER] Request:", req.method, req.url);
-    const expressApp = await loadApp();
-    console.log("[API HANDLER] Invoking Express app");
+    if (!expressApp) {
+      console.log('[API] App not ready, initializing...');
+      await initializeApp();
+    }
     return expressApp(req, res);
   } catch (err) {
-    console.error("[API HANDLER] Error:", err.message);
-    console.error("[API HANDLER] Stack:", err.stack);
-    res.status(500).json({ error: "Internal Server Error", message: err.message, stack: err.stack });
+    console.error('[API] Handler error:', err.message);
+    res.status(500).json({ 
+      error: 'Server error',
+      message: err.message 
+    });
   }
 };
