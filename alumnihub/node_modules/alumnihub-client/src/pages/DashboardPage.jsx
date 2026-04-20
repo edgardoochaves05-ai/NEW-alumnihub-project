@@ -613,9 +613,20 @@ function StudentDashboard({ profile }) {
 
 // ── Main Export ────────────────────────────────────────────────
 export default function DashboardPage() {
-  const { profile, isAlumni } = useAuth();
+  const { profile, loading, isAlumni, isFaculty, isAdmin } = useAuth();
 
-  if (profile?.role === "student") return <StudentDashboard profile={profile} />;
+  if (loading || !profile) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 size={28} className="animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  if (profile.role === "student") return <StudentDashboard profile={profile} />;
   if (isAlumni) return <AlumniDashboard profile={profile} />;
-  return <FacultyAdminDashboard profile={profile} />;
+  if (isFaculty || isAdmin) return <FacultyAdminDashboard profile={profile} />;
+
+  // Unknown role — show alumni view as safe default
+  return <AlumniDashboard profile={profile} />;
 }

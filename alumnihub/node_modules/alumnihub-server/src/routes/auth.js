@@ -1,6 +1,10 @@
 const { Router } = require("express");
+const { createClient } = require("@supabase/supabase-js");
 const { supabase } = require("../config/supabase.js");
 const { authenticate } = require("../middleware/auth.js");
+
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
 const router = Router();
 
@@ -29,18 +33,46 @@ router.post("/register", async (req, res, next) => {
       return res.status(400).json({ error: "Invalid role" });
     }
 
-    const { data, error } = await supabase.auth.admin.createUser({
+    // Use the anon client so Supabase applies its normal email-confirmation
+    // flow (sends the confirmation link to the user's inbox).
+    const anonClient = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    const clientUrl = process.env.CLIENT_URL || "https://alumnihub-two.vercel.app";
+    const { data, error } = await anonClient.auth.signUp({
       email,
       password,
-      user_metadata: { first_name, last_name, role },
-      email_confirm: true,
+      options: {
+        data: { first_name, last_name, role },
+        emailRedirectTo: `${clientUrl}/dashboard`,
+      },
     });
 
     if (error) {
       const status = error.status || error.statusCode || 400;
       return res.status(status).json({ error: error.message });
     }
-    res.status(201).json({ message: "Account created successfully", user: data.user });
+
+    if (!data.user) {
+      return res.status(400).json({ error: "Registration failed. Please try again." });
+    }
+
+    // Upsert the profile immediately with the service-role client (bypasses RLS)
+    // so the row exists as soon as the user confirms their email and logs in.
+    await supabase.from("profiles").upsert(
+      {
+        id: data.user.id,
+        email,
+        role,
+        first_name: first_name || "",
+        last_name: last_name || "",
+        is_active: true,
+      },
+      { onConflict: "id" }
+    );
+
+    res.status(201).json({ message: "Account created! Please check your email to confirm before signing in." });
   } catch (err) {
     console.error("[REGISTER] Unexpected error:", err.message);
     next(err);
