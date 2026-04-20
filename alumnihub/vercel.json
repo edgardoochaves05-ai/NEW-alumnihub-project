@@ -3,6 +3,9 @@
   "installCommand": "npm ci",
   "buildCommand": "npm run build",
   "outputDirectory": "client/dist",
+  "env": {
+    "NODE_ENV": "production"
+  },
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/index.js" },
     { "handle": "filesystem" },
