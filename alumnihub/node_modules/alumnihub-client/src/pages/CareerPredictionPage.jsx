@@ -88,7 +88,8 @@ export default function CareerPredictionPage() {
       const { data } = await api.get(`/analytics/career-prediction/${targetId}`);
       setPredictions(data);
     } catch(err) {
-      setError(err.response?.data?.error || "Failed to load career predictions.");
+      const errorMsg = err.response?.data?.error || "Failed to load career predictions.";
+      setError(typeof errorMsg === 'string' ? errorMsg : errorMsg.message || "Failed to load career predictions.");
     } finally { setLoading(false); }
   }
 
