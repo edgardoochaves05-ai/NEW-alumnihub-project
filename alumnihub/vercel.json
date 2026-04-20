@@ -5,10 +5,5 @@
   "outputDirectory": "client/dist",
   "env": {
     "NODE_ENV": "production"
-  },
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api.cjs" },
-    { "handle": "filesystem" },
-    { "src": "/(.*)", "dest": "/index.html" }
-  ]
+  }
 }
