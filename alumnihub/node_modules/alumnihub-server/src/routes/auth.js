@@ -4,6 +4,17 @@ const { authenticate } = require("../middleware/auth.js");
 
 const router = Router();
 
+// Guard: supabase must be configured
+router.use((req, res, next) => {
+  if (!supabase) {
+    return res.status(503).json({
+      error: "Database service unavailable. Check server configuration.",
+      details: "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.",
+    });
+  }
+  next();
+});
+
 // ── Register ──
 router.post("/register", async (req, res, next) => {
   try {

@@ -2,6 +2,9 @@ const { supabase } = require("../config/supabase.js");
 
 // Verify JWT and attach user to request
 async function authenticate(req, res, next) {
+  if (!supabase) {
+    return res.status(503).json({ error: "Database service unavailable. Check server configuration." });
+  }
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith("Bearer ")) {
