@@ -155,7 +155,8 @@ function PostJobModal({ onClose, onCreated }) {
       const { data } = await api.post("/jobs", form);
       onCreated(data);
     } catch(err) {
-      setError(err.response?.data?.error || "Failed to post job.");
+      const errorMsg = err.response?.data?.error || "Failed to post job.";
+      setError(typeof errorMsg === 'string' ? errorMsg : errorMsg.message || "Failed to post job.");
     } finally { setSaving(false); }
   }
 

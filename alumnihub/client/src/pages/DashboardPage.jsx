@@ -53,7 +53,8 @@ function AnnouncementModal({ onClose, onCreated }) {
       const { data } = await api.post("/announcements", form);
       onCreated(data);
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to post announcement.");
+      const errorMsg = err.response?.data?.error || "Failed to post announcement.";
+      setError(typeof errorMsg === 'string' ? errorMsg : errorMsg.message || "Failed to post announcement.");
     } finally {
       setSaving(false);
     }
