@@ -5,7 +5,7 @@ import morgan from "morgan";
 import dotenv from "dotenv";
 import rateLimit from "express-rate-limit";
 
-// Routes  
+// Routes - import them directly
 import authRoutes from "./routes/auth.js";
 import profileRoutes from "./routes/profiles.js";
 import careerRoutes from "./routes/career.js";
@@ -16,12 +16,14 @@ import feedbackRoutes from "./routes/feedback.js";
 import messageRequestRoutes from "./routes/messageRequests.js";
 import announcementRoutes from "./routes/announcements.js";
 
+console.log("[APP] All routes imported successfully");
+
 // Config
 import { supabase, isSupabaseConfigured } from "./config/supabase.js";
 
-console.log("[APP] All modules imported successfully");
+console.log("[APP] Config imported");
 
-// Load environment variables - simple approach
+// Load environment variables
 dotenv.config();
 
 
@@ -65,6 +67,8 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/message-requests", messageRequestRoutes);
 app.use("/api/announcements", announcementRoutes);
+
+console.log("[APP] Routes registered");
 
 // Health check
 app.get("/api/health", (req, res) => {
