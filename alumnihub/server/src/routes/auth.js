@@ -60,7 +60,7 @@ router.post("/register", async (req, res, next) => {
 
     // Upsert the profile immediately with the service-role client (bypasses RLS)
     // so the row exists as soon as the user confirms their email and logs in.
-    await supabase.from("profiles").upsert(
+    const { error: profileError } = await supabase.from("profiles").upsert(
       {
         id: data.user.id,
         email,
@@ -71,6 +71,9 @@ router.post("/register", async (req, res, next) => {
       },
       { onConflict: "id" }
     );
+    if (profileError) {
+      console.error("[REGISTER] Profile upsert failed:", profileError.message, profileError);
+    }
 
     res.status(201).json({ message: "Account created! Please check your email to confirm before signing in." });
   } catch (err) {
