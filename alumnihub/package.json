@@ -5,8 +5,7 @@
   "private": true,
   "workspaces": [
     "client",
-    "server",
-    "api"
+    "server"
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev:client\" \"npm run dev:server\"",
