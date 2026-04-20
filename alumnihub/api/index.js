@@ -1,12 +1,11 @@
 let app = null;
 
-module.exports = async (req, res) => {
+module.exports = (req, res) => {
   try {
     // Lazy load the Express app on first request
     if (!app) {
       console.log('[Handler] Loading Express app...');
-      const appModule = await import('../server/src/app.js');
-      app = appModule.default;
+      app = require('../server/src/app.js');
       console.log('[Handler] Express app loaded');
     }
 

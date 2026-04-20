@@ -1,6 +1,6 @@
-import { Router } from "express";
-import { supabase } from "../config/supabase.js";
-import { authenticate } from "../middleware/auth.js";
+const { Router } = require("express");
+const { supabase } = require("../config/supabase.js");
+const { authenticate } = require("../middleware/auth.js");
 
 const router = Router();
 
@@ -37,4 +37,4 @@ router.get("/me", authenticate, (req, res) => {
   res.json({ user: req.user, profile: req.profile });
 });
 
-export default router;
+module.exports = router;

@@ -1,13 +1,13 @@
-import { Router } from "express";
-import { authenticate, authorize } from "../middleware/auth.js";
-import {
+const { Router } = require("express");
+const { authenticate, authorize } = require("../middleware/auth.js");
+const {
   generateCareerPredictions,
   computeJobMatches,
   generateCurriculumImpact,
   getAvailablePrograms,
   getOverallStats,
-} from "../services/ai/index.js";
-import { supabase } from "../config/supabase.js";
+} = require("../services/ai/index.js");
+const { supabase } = require("../config/supabase.js");
 
 const router = Router();
 
@@ -170,4 +170,4 @@ router.get("/employment-trends", authenticate, authorize("faculty", "admin"), as
   }
 });
 
-export default router;
+module.exports = router;

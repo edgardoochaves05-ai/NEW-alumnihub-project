@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+const { createClient } = require("@supabase/supabase-js");
 
 // Use SUPABASE_URL for server (not VITE_ prefix), fall back to VITE_ for local dev
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -9,19 +9,21 @@ if (!supabaseUrl || !supabaseServiceKey) {
 }
 
 // Server-side client uses service role key for admin access
-export const supabase = supabaseUrl && supabaseServiceKey
+const supabase = supabaseUrl && supabaseServiceKey
   ? createClient(supabaseUrl, supabaseServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     })
   : null;
 
-export const isSupabaseConfigured = () => Boolean(supabaseUrl && supabaseServiceKey);
+const isSupabaseConfigured = () => Boolean(supabaseUrl && supabaseServiceKey);
 
 // Create a client scoped to a specific user's JWT (for RLS)
-export function createUserClient(accessToken) {
+function createUserClient(accessToken) {
   const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
   if (!supabaseUrl || !anonKey) return null;
   return createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: `Bearer ${accessToken}` } },
   });
 }
+
+module.exports = { supabase, isSupabaseConfigured, createUserClient };

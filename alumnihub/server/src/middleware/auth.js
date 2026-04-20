@@ -1,7 +1,7 @@
-import { supabase } from "../config/supabase.js";
+const { supabase } = require("../config/supabase.js");
 
 // Verify JWT and attach user to request
-export async function authenticate(req, res, next) {
+async function authenticate(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith("Bearer ")) {
@@ -33,7 +33,7 @@ export async function authenticate(req, res, next) {
 }
 
 // Role-based access control
-export function authorize(...allowedRoles) {
+function authorize(...allowedRoles) {
   return (req, res, next) => {
     if (!req.profile || !allowedRoles.includes(req.profile.role)) {
       return res.status(403).json({ error: "Insufficient permissions" });
@@ -41,3 +41,5 @@ export function authorize(...allowedRoles) {
     next();
   };
 }
+
+module.exports = { authenticate, authorize };

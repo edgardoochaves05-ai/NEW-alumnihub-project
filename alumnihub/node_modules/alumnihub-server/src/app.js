@@ -1,25 +1,25 @@
-import express from "express";
-import cors from "cors";
-import helmet from "helmet";
-import morgan from "morgan";
-import dotenv from "dotenv";
-import rateLimit from "express-rate-limit";
+const express = require("express");
+const cors = require("cors");
+const helmet = require("helmet");
+const morgan = require("morgan");
+const dotenv = require("dotenv");
+const rateLimit = require("express-rate-limit");
 
 // Routes - import them directly
-import authRoutes from "./routes/auth.js";
-import profileRoutes from "./routes/profiles.js";
-import careerRoutes from "./routes/career.js";
-import jobRoutes from "./routes/jobs.js";
-import messageRoutes from "./routes/messages.js";
-import analyticsRoutes from "./routes/analytics.js";
-import feedbackRoutes from "./routes/feedback.js";
-import messageRequestRoutes from "./routes/messageRequests.js";
-import announcementRoutes from "./routes/announcements.js";
+const authRoutes = require("./routes/auth.js");
+const profileRoutes = require("./routes/profiles.js");
+const careerRoutes = require("./routes/career.js");
+const jobRoutes = require("./routes/jobs.js");
+const messageRoutes = require("./routes/messages.js");
+const analyticsRoutes = require("./routes/analytics.js");
+const feedbackRoutes = require("./routes/feedback.js");
+const messageRequestRoutes = require("./routes/messageRequests.js");
+const announcementRoutes = require("./routes/announcements.js");
 
 console.log("[APP] All routes imported successfully");
 
 // Config
-import { supabase, isSupabaseConfigured } from "./config/supabase.js";
+const { supabase, isSupabaseConfigured } = require("./config/supabase.js");
 
 console.log("[APP] Config imported");
 
@@ -113,4 +113,4 @@ app.use((err, req, res, next) => {
   });
 });
 
-export default app;
+module.exports = app;
