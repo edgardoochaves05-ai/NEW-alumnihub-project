@@ -190,11 +190,24 @@ function AlumniDashboard({ profile }) {
       api.get("/announcements?limit=5"),
     ])
       .then(([dashRes, jobsRes, announcementsRes]) => {
-        setData(dashRes.data);
-        setRecentJobs(jobsRes.data.jobs || []);
-        setAnnouncements(announcementsRes.data || []);
+        // Safely handle dashboard data
+        const dashboard = dashRes.data || {};
+        setData(dashboard);
+        
+        // Handle jobs - expect array or object with jobs property
+        const jobs = Array.isArray(jobsRes.data) ? jobsRes.data : (jobsRes.data?.jobs || []);
+        setRecentJobs(Array.isArray(jobs) ? jobs : []);
+        
+        // Handle announcements - expect array
+        const annList = Array.isArray(announcementsRes.data) ? announcementsRes.data : (announcementsRes.data?.announcements || []);
+        setAnnouncements(Array.isArray(annList) ? annList : []);
       })
-      .catch(console.error)
+      .catch((err) => {
+        console.error("Error loading alumni dashboard:", err);
+        setData({});
+        setRecentJobs([]);
+        setAnnouncements([]);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -303,7 +316,7 @@ function AlumniDashboard({ profile }) {
       </div>
 
       {/* Top Job Matches */}
-      {data?.topMatches?.length > 0 && (
+      {Array.isArray(data?.topMatches) && data.topMatches.length > 0 && (
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -343,8 +356,14 @@ function FacultyAdminDashboard({ profile }) {
 
   const fetchAnnouncements = () =>
     api.get("/announcements?limit=4")
-      .then(({ data }) => setAnnouncements(data || []))
-      .catch(console.error);
+      .then(({ data }) => {
+        const annList = Array.isArray(data) ? data : (data?.announcements || []);
+        setAnnouncements(Array.isArray(annList) ? annList : []);
+      })
+      .catch((err) => {
+        console.error("Error loading announcements:", err);
+        setAnnouncements([]);
+      });
 
   useEffect(() => {
     Promise.all([
@@ -352,10 +371,19 @@ function FacultyAdminDashboard({ profile }) {
       api.get("/analytics/employment-trends"),
     ])
       .then(([statsRes, trendsRes]) => {
-        setStats(statsRes.data);
-        setTrends(trendsRes.data || []);
+        // Safely handle stats
+        const statsData = (statsRes.data && typeof statsRes.data === 'object') ? statsRes.data : {};
+        setStats(statsData);
+        
+        // Safely handle trends - expect array
+        const trendsList = Array.isArray(trendsRes.data) ? trendsRes.data : (trendsRes.data?.trends || []);
+        setTrends(Array.isArray(trendsList) ? trendsList : []);
       })
-      .catch(console.error)
+      .catch((err) => {
+        console.error("Error loading dashboard stats and trends:", err);
+        setStats({});
+        setTrends([]);
+      })
       .finally(() => setLoading(false));
 
     fetchAnnouncements();
