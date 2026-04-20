@@ -1,0 +1,9 @@
+node_modules
+.git
+.gitignore
+*.md
+docs/
+scripts/
+client/src
+client/node_modules
+server/node_modules
