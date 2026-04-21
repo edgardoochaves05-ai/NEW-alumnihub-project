@@ -4,9 +4,12 @@ import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { formatDistanceToNow } from "date-fns";
 import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+} from "recharts";
+import {
   Search, Filter, Briefcase, Building2, MapPin, Clock, Plus, X,
   ChevronLeft, ChevronRight, Loader2, Sparkles, ExternalLink,
-  BookmarkPlus, Calendar, GraduationCap, User
+  BookmarkPlus, Calendar, GraduationCap, User, Mail, ChevronDown, ChevronUp,
 } from "lucide-react";
 
 const INDUSTRIES = ["Technology","Finance","Healthcare","Education","Engineering","Business","Government","Non-profit","Other"];
@@ -24,13 +27,81 @@ function MatchBadge({ score }) {
   );
 }
 
-function JobCard({ job, matchScore, onClick }) {
+// ── Top 10 Match Chart (alumni only) ───────────────────────────
+function Top10MatchChart({ jobs, matchMap, onJobClick }) {
+  const top10 = jobs
+    .filter(j => matchMap[j.id] > 0)
+    .sort((a, b) => (matchMap[b.id] || 0) - (matchMap[a.id] || 0))
+    .slice(0, 10)
+    .map(j => ({
+      name: j.title.length > 24 ? j.title.slice(0, 24) + "…" : j.title,
+      company: j.company,
+      score: Math.round((matchMap[j.id] || 0) * 100),
+      job: j,
+    }));
+
+  if (top10.length === 0) return null;
+
+  const barColor = (score) =>
+    score >= 75 ? "#16a34a" : score >= 50 ? "#2563eb" : "#9ca3af";
+
+  function ChartTooltip({ active, payload }) {
+    if (!active || !payload?.length) return null;
+    const { name, company, score } = payload[0].payload;
+    return (
+      <div className="bg-white border border-gray-200 rounded-lg shadow-md px-3 py-2 text-sm">
+        <p className="font-semibold text-gray-900">{name}</p>
+        <p className="text-gray-400 text-xs">{company}</p>
+        <p className="font-medium mt-1" style={{ color: barColor(score) }}>{score}% match</p>
+        <p className="text-xs text-gray-400 mt-0.5">Click to view details</p>
+      </div>
+    );
+  }
+
   return (
-    <div onClick={() => onClick(job)} className="card cursor-pointer hover:shadow-md transition-shadow">
+    <div className="card">
+      <div className="flex items-center gap-2 mb-1">
+        <Sparkles size={15} className="text-blue-600"/>
+        <h3 className="font-semibold text-gray-900 text-sm">Top 10 AI-Matched Jobs</h3>
+        <span className="text-xs text-gray-400 ml-auto hidden sm:block">Click a bar to view details</span>
+      </div>
+      <p className="text-xs text-gray-400 mb-4">Ranked by your profile match score</p>
+      <ResponsiveContainer width="100%" height={top10.length * 36 + 20}>
+        <BarChart data={top10} layout="vertical" margin={{ left: 0, right: 48, top: 0, bottom: 0 }}>
+          <XAxis type="number" domain={[0, 100]} tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} axisLine={false} tickLine={false}/>
+          <YAxis type="category" dataKey="name" width={148} tick={{ fontSize: 11 }} axisLine={false} tickLine={false}/>
+          <Tooltip content={<ChartTooltip/>} cursor={{ fill: "#f1f5f9" }}/>
+          <Bar dataKey="score" radius={[0, 4, 4, 0]} cursor="pointer"
+            label={{ position: "right", formatter: v => `${v}%`, fontSize: 11, fill: "#6b7280" }}
+            onClick={(data) => onJobClick(data.job)}>
+            {top10.map((entry, i) => (
+              <Cell key={i} fill={barColor(entry.score)}/>
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+      <div className="flex flex-wrap items-center gap-4 mt-3 pt-3 border-t border-gray-100 text-xs text-gray-500">
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-600 inline-block"/>75%+ Strong Match</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block"/>50%+ Good Match</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-gray-400 inline-block"/>Partial Match</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Job Card ───────────────────────────────────────────────────
+function JobCard({ job, matchScore, onClick }) {
+  const [expanded, setExpanded] = useState(false);
+  const desc    = job.description || "";
+  const isLong  = desc.length > 110;
+  const preview = isLong && !expanded ? desc.slice(0, 110) + "…" : desc;
+
+  return (
+    <div onClick={() => onClick(job)} className="card cursor-pointer hover:shadow-md transition-shadow flex flex-col gap-2">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <h3 className="font-semibold text-gray-900 text-sm">{job.title}</h3>
+            <h3 className="font-semibold text-gray-900 text-sm leading-snug">{job.title}</h3>
             <MatchBadge score={matchScore}/>
           </div>
           <div className="flex items-center gap-1 text-xs text-gray-500 mb-2">
@@ -46,21 +117,33 @@ function JobCard({ job, matchScore, onClick }) {
           <Briefcase size={18} className="text-blue-600"/>
         </div>
       </div>
+
+      {/* Truncated description */}
+      {desc && (
+        <div onClick={e => e.stopPropagation()}>
+          <p className="text-xs text-gray-500 leading-relaxed">{preview}</p>
+          {isLong && (
+            <button
+              onClick={e => { e.stopPropagation(); setExpanded(v => !v); }}
+              className="flex items-center gap-0.5 text-xs text-blue-600 hover:underline mt-1"
+            >
+              {expanded ? <><ChevronUp size={11}/>Show less</> : <><ChevronDown size={11}/>Read more</>}
+            </button>
+          )}
+        </div>
+      )}
+
       {(job.salary_min || job.salary_max) && (
-        <p className="text-xs text-green-700 font-medium mt-3">
+        <p className="text-xs text-green-700 font-medium">
           ₱ {job.salary_min ? Number(job.salary_min).toLocaleString() : "?"}
           {job.salary_max ? ` – ₱ ${Number(job.salary_max).toLocaleString()}` : "+"}
         </p>
       )}
-      <div className="flex items-center justify-between mt-2">
+      <div className="flex items-center justify-between mt-auto">
         {job.profiles ? (
-          <Link
-            to={`/profile/${job.posted_by}`}
-            onClick={e => e.stopPropagation()}
-            className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
-          >
-            <User size={11}/>
-            {job.profiles.first_name} {job.profiles.last_name}
+          <Link to={`/profile/${job.posted_by}`} onClick={e => e.stopPropagation()}
+            className="flex items-center gap-1 text-xs text-blue-600 hover:underline">
+            <User size={11}/>{job.profiles.first_name} {job.profiles.last_name}
           </Link>
         ) : <span/>}
         <p className="text-xs text-gray-400">{formatDistanceToNow(new Date(job.created_at), { addSuffix: true })}</p>
@@ -69,6 +152,7 @@ function JobCard({ job, matchScore, onClick }) {
   );
 }
 
+// ── Job Detail Modal ───────────────────────────────────────────
 function JobDetailModal({ job, matchScore, onClose }) {
   if (!job) return null;
   return (
@@ -84,55 +168,76 @@ function JobDetailModal({ job, matchScore, onClose }) {
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 flex-shrink-0 ml-4"><X size={20}/></button>
         </div>
+
         <div className="p-6 space-y-5">
+          {/* Meta */}
           <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-            {job.location       && <span className="flex items-center gap-1.5"><MapPin size={14}/>{job.location}</span>}
-            {job.job_type       && <span className="flex items-center gap-1.5"><Clock size={14}/>{job.job_type}</span>}
-            {job.industry       && <span className="flex items-center gap-1.5"><Briefcase size={14}/>{job.industry}</span>}
+            {job.location        && <span className="flex items-center gap-1.5"><MapPin size={14}/>{job.location}</span>}
+            {job.job_type        && <span className="flex items-center gap-1.5"><Clock size={14}/>{job.job_type}</span>}
+            {job.industry        && <span className="flex items-center gap-1.5"><Briefcase size={14}/>{job.industry}</span>}
             {job.experience_level && <span className="flex items-center gap-1.5"><GraduationCap size={14}/>{job.experience_level} level</span>}
-            {job.expires_at     && <span className="flex items-center gap-1.5"><Calendar size={14}/>Deadline: {new Date(job.expires_at).toLocaleDateString()}</span>}
+            {job.expires_at      && <span className="flex items-center gap-1.5"><Calendar size={14}/>Deadline: {new Date(job.expires_at).toLocaleDateString()}</span>}
           </div>
+
+          {/* Salary */}
           {(job.salary_min || job.salary_max) && (
             <p className="text-sm font-semibold text-green-700">
               Salary: ₱ {job.salary_min ? Number(job.salary_min).toLocaleString() : "?"}
               {job.salary_max ? ` – ₱ ${Number(job.salary_max).toLocaleString()}` : "+"}
             </p>
           )}
+
+          {/* Description */}
           {job.description && (
             <div>
               <h4 className="text-sm font-semibold text-gray-800 mb-2">Description</h4>
               <p className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">{job.description}</p>
             </div>
           )}
+
+          {/* Requirements */}
           {job.requirements && (
             <div>
               <h4 className="text-sm font-semibold text-gray-800 mb-2">Requirements</h4>
               <p className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">{job.requirements}</p>
             </div>
           )}
+
+          {/* Posted by */}
           {job.profiles && (
             <div className="flex items-center gap-2 pt-1 border-t border-gray-100">
               <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
-                {job.profiles.first_name?.[0]}{job.profiles.last_name?.[0]}
+                {job.profiles.avatar_url
+                  ? <img src={job.profiles.avatar_url} className="w-8 h-8 rounded-full object-cover" alt=""/>
+                  : `${job.profiles.first_name?.[0]}${job.profiles.last_name?.[0]}`}
               </div>
               <div>
-                <p className="text-xs text-gray-500">Posted by</p>
-                <Link
-                  to={`/profile/${job.posted_by}`}
-                  onClick={onClose}
-                  className="text-sm font-medium text-blue-600 hover:underline"
-                >
+                <p className="text-xs text-gray-400">Posted by</p>
+                <Link to={`/profile/${job.posted_by}`} onClick={onClose}
+                  className="text-sm font-medium text-blue-600 hover:underline">
                   {job.profiles.first_name} {job.profiles.last_name}
                 </Link>
                 <span className="ml-2 text-xs text-gray-400 capitalize">{job.profiles.role}</span>
               </div>
             </div>
           )}
-          {job.application_url && (
-            <a href={job.application_url} target="_blank" rel="noreferrer"
-              className="btn-primary inline-flex items-center gap-2 text-sm">
-              Apply Now <ExternalLink size={14}/>
-            </a>
+
+          {/* Action buttons */}
+          {(job.application_url || job.application_email) && (
+            <div className="flex flex-wrap gap-3 pt-2 border-t border-gray-100">
+              {job.application_url && (
+                <a href={job.application_url} target="_blank" rel="noreferrer"
+                  className="btn-primary inline-flex items-center gap-2 text-sm">
+                  Visit Website <ExternalLink size={14}/>
+                </a>
+              )}
+              {job.application_email && (
+                <a href={`mailto:${job.application_email}`}
+                  className="btn-secondary inline-flex items-center gap-2 text-sm">
+                  Apply via Email <Mail size={14}/>
+                </a>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -140,8 +245,13 @@ function JobDetailModal({ job, matchScore, onClose }) {
   );
 }
 
+// ── Post Job Modal ─────────────────────────────────────────────
 function PostJobModal({ onClose, onCreated }) {
-  const [form, setForm] = useState({ title:"", company:"", location:"", industry:"", job_type:"full-time", experience_level:"entry", salary_min:"", salary_max:"", description:"", requirements:"", application_url:"", expires_at:"" });
+  const [form, setForm] = useState({
+    title:"", company:"", location:"", industry:"", job_type:"full-time",
+    experience_level:"entry", salary_min:"", salary_max:"",
+    description:"", requirements:"", application_url:"", application_email:"", expires_at:"",
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState("");
 
@@ -212,17 +322,21 @@ function PostJobModal({ onClose, onCreated }) {
               <label className="label">Application Deadline</label>
               <input name="expires_at" type="date" value={form.expires_at} onChange={handleChange} className="input-field"/>
             </div>
+            <div>
+              <label className="label">Application Email</label>
+              <input name="application_email" type="email" value={form.application_email} onChange={handleChange} className="input-field" placeholder="hr@company.com"/>
+            </div>
             <div className="col-span-2">
-              <label className="label">Application URL</label>
+              <label className="label">Website / Application URL</label>
               <input name="application_url" value={form.application_url} onChange={handleChange} className="input-field" placeholder="https://..."/>
             </div>
             <div className="col-span-2">
               <label className="label">Description</label>
-              <textarea name="description" value={form.description} onChange={handleChange} className="input-field resize-none h-24" placeholder="Role overview..."/>
+              <textarea name="description" value={form.description} onChange={handleChange} className="input-field resize-none h-24" placeholder="Role overview…"/>
             </div>
             <div className="col-span-2">
               <label className="label">Requirements</label>
-              <textarea name="requirements" value={form.requirements} onChange={handleChange} className="input-field resize-none h-20" placeholder="Qualifications and skills..."/>
+              <textarea name="requirements" value={form.requirements} onChange={handleChange} className="input-field resize-none h-20" placeholder="Qualifications and skills…"/>
             </div>
           </div>
           <div className="flex gap-3 pt-2">
@@ -237,24 +351,24 @@ function PostJobModal({ onClose, onCreated }) {
   );
 }
 
+// ── Main Page ──────────────────────────────────────────────────
 export default function JobsPage() {
   const { profile } = useAuth();
-  const [jobs, setJobs]           = useState([]);
-  const [matchMap, setMatchMap]   = useState({});
-  const [loading, setLoading]     = useState(true);
-  const [search, setSearch]       = useState("");
-  const [industry, setIndustry]   = useState("");
-  const [jobType, setJobType]     = useState("");
-  const [expLevel, setExpLevel]   = useState("");
-  const [page, setPage]           = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [jobs, setJobs]               = useState([]);
+  const [matchMap, setMatchMap]       = useState({});
+  const [loading, setLoading]         = useState(true);
+  const [search, setSearch]           = useState("");
+  const [industry, setIndustry]       = useState("");
+  const [jobType, setJobType]         = useState("");
+  const [expLevel, setExpLevel]       = useState("");
+  const [page, setPage]               = useState(1);
+  const [totalPages, setTotalPages]   = useState(1);
   const [selectedJob, setSelectedJob] = useState(null);
-  const [showPost, setShowPost]   = useState(false);
+  const [showPost, setShowPost]       = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const debounceRef = useRef(null);
 
   useEffect(() => {
-    // Load AI match scores for alumni
     if (profile?.role === "alumni") {
       api.get("/jobs/matched").then(({ data }) => {
         const map = {};
@@ -287,6 +401,7 @@ export default function JobsPage() {
   }
 
   const activeFilters = [industry, jobType, expLevel].filter(Boolean).length;
+  const hasMatches    = profile?.role === "alumni" && Object.keys(matchMap).length > 0;
 
   return (
     <div className="max-w-5xl mx-auto space-y-5">
@@ -301,6 +416,11 @@ export default function JobsPage() {
         </button>
       </div>
 
+      {/* Top 10 Chart — alumni only */}
+      {hasMatches && (
+        <Top10MatchChart jobs={jobs} matchMap={matchMap} onJobClick={setSelectedJob}/>
+      )}
+
       {/* Search + Filter */}
       <div className="flex gap-3 flex-wrap">
         <div className="relative flex-1 min-w-56">
@@ -310,7 +430,10 @@ export default function JobsPage() {
         </div>
         <button onClick={() => setShowFilters(v => !v)}
           className={`btn-secondary flex items-center gap-2 text-sm ${activeFilters ? "border-blue-500 text-blue-600" : ""}`}>
-          <Filter size={14}/>Filters{activeFilters > 0 && <span className="bg-blue-600 text-white text-xs w-4 h-4 rounded-full flex items-center justify-center">{activeFilters}</span>}
+          <Filter size={14}/>Filters
+          {activeFilters > 0 && (
+            <span className="bg-blue-600 text-white text-xs w-4 h-4 rounded-full flex items-center justify-center">{activeFilters}</span>
+          )}
         </button>
       </div>
 
@@ -347,9 +470,9 @@ export default function JobsPage() {
       )}
 
       {/* AI Banner */}
-      {profile?.role === "alumni" && Object.keys(matchMap).length > 0 && (
+      {hasMatches && (
         <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700">
-          <Sparkles size={16}/> AI match scores are shown on each listing based on your profile.
+          <Sparkles size={16}/> AI match scores shown on each listing are based on your profile.
         </div>
       )}
 
