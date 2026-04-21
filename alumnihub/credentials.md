@@ -27,3 +27,8 @@
 ### Student Account 2 (Dummy)
 - Username: juan.delacruz@alumnihub.com
 - Password: Student@Hub2026!
+
+## Career Advisor Account
+
+- Username: carla.reyes.advisor@tip.edu.ph
+- Password: Advisor@Hub2026!
