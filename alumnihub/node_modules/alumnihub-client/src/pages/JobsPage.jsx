@@ -346,6 +346,7 @@ function PostJobModal({ onClose, onCreated }) {
 export default function JobsPage() {
   const { profile } = useAuth();
   const [jobs, setJobs]               = useState([]);
+  const [top10Jobs, setTop10Jobs]     = useState([]); // stable — never changes on pagination
   const [matchMap, setMatchMap]       = useState({});
   const [loading, setLoading]         = useState(true);
   const [search, setSearch]           = useState("");
@@ -360,23 +361,29 @@ export default function JobsPage() {
   const [showOthers, setShowOthers]   = useState(false);
   const debounceRef = useRef(null);
 
+  // top10Ids derived from the stable top10Jobs list (unaffected by pagination)
   const top10Ids = useMemo(() => {
-    if (profile?.role !== "alumni" || Object.keys(matchMap).length === 0) return new Set();
-    return new Set(
-      [...jobs]
-        .filter(j => matchMap[j.id] > 0)
-        .sort((a, b) => (matchMap[b.id] || 0) - (matchMap[a.id] || 0))
-        .slice(0, 10)
-        .map(j => j.id)
-    );
-  }, [jobs, matchMap, profile]);
+    if (!top10Jobs.length) return new Set();
+    return new Set(top10Jobs.map(j => j.id));
+  }, [top10Jobs]);
 
   useEffect(() => {
     if (profile?.role === "alumni") {
       api.get("/jobs/matched").then(({ data }) => {
         const map = {};
-        for (const m of data) { if (m.job_listings?.id) map[m.job_listings.id] = m.match_score; }
+        const jobObjs = [];
+        for (const m of data) {
+          if (m.job_listings?.id) {
+            map[m.job_listings.id] = m.match_score;
+            jobObjs.push(m.job_listings);
+          }
+        }
         setMatchMap(map);
+        // Sort by score descending and take top 10 — stored permanently
+        const sorted = jobObjs
+          .sort((a, b) => (map[b.id] || 0) - (map[a.id] || 0))
+          .slice(0, 10);
+        setTop10Jobs(sorted);
       }).catch(() => {});
     }
   }, [profile]);
@@ -419,12 +426,35 @@ export default function JobsPage() {
         </button>
       </div>
 
-      {/* Top 10 Chart — alumni only */}
+      {/* Top 10 Chart — alumni only, uses stable top10Jobs */}
       {hasMatches && (
-        <Top10MatchChart jobs={jobs} matchMap={matchMap} onJobClick={setSelectedJob}/>
+        <Top10MatchChart jobs={top10Jobs} matchMap={matchMap} onJobClick={setSelectedJob}/>
       )}
 
-      {/* Search + Filter — only visible when Other Listings is open */}
+      {/* AI Banner */}
+      {hasMatches && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700">
+          <Sparkles size={16}/> AI match scores shown on each listing are based on your profile.
+        </div>
+      )}
+
+      {/* Other Listings toggle */}
+      {hasMatches && (
+        <div>
+          <button
+            onClick={() => setShowOthers(v => !v)}
+            className={`text-sm px-4 py-1.5 rounded-lg font-medium transition-colors border ${
+              showOthers
+                ? "bg-blue-600 text-white border-blue-600"
+                : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            Other Listings
+          </button>
+        </div>
+      )}
+
+      {/* Search + Filter — only visible when Other Listings is open (or non-alumni) */}
       {(!hasMatches || showOthers) && (
         <>
           <div className="flex gap-3 flex-wrap">
@@ -474,29 +504,6 @@ export default function JobsPage() {
             </div>
           )}
         </>
-      )}
-
-      {/* AI Banner */}
-      {hasMatches && (
-        <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700">
-          <Sparkles size={16}/> AI match scores shown on each listing are based on your profile.
-        </div>
-      )}
-
-      {/* Other Listings Section — jobs outside the top 10 */}
-      {hasMatches && (
-        <div>
-          <button
-            onClick={() => setShowOthers(v => !v)}
-            className={`text-sm px-4 py-1.5 rounded-lg font-medium transition-colors border ${
-              showOthers
-                ? "bg-blue-600 text-white border-blue-600"
-                : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            Other Listings
-          </button>
-        </div>
       )}
 
       {/* Jobs Grid */}
