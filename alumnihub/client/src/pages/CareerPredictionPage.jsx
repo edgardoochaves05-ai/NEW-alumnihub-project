@@ -146,7 +146,7 @@ export default function CareerPredictionPage() {
                 <RadarChart data={radarData}>
                   <PolarGrid stroke="#e5e7eb"/>
                   <PolarAngleAxis dataKey="skill" tick={{ fontSize: 11, fill: "#6b7280" }}/>
-                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 10 }}/>
+                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`}/>
                   <Radar name="Skill Score" dataKey="score" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.25} strokeWidth={2}/>
                   <Tooltip formatter={v => [`${v}%`, "Score"]}/>
                 </RadarChart>

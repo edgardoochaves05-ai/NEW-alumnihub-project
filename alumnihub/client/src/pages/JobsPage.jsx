@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { Link } from "react-router-dom";
 import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
@@ -9,7 +9,7 @@ import {
 import {
   Search, Filter, Briefcase, Building2, MapPin, Clock, Plus, X,
   ChevronLeft, ChevronRight, Loader2, Sparkles, ExternalLink,
-  BookmarkPlus, Calendar, GraduationCap, User, Mail, ChevronDown, ChevronUp,
+  BookmarkPlus, Calendar, GraduationCap, User, Mail,
 } from "lucide-react";
 
 const INDUSTRIES = ["Technology","Finance","Healthcare","Education","Engineering","Business","Government","Non-profit","Other"];
@@ -24,6 +24,24 @@ function MatchBadge({ score }) {
     <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${color}`}>
       <Sparkles size={10}/>{pct}% match
     </span>
+  );
+}
+
+function MatchBar({ score }) {
+  if (!score) return null;
+  const pct = Math.round(score * 100);
+  const barColor = pct >= 75 ? "bg-green-500" : pct >= 50 ? "bg-blue-500" : "bg-gray-300";
+  const textColor = pct >= 75 ? "text-green-700" : pct >= 50 ? "text-blue-700" : "text-gray-500";
+  return (
+    <div className="mt-2">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs text-gray-400 flex items-center gap-1"><Sparkles size={10}/>AI Match</span>
+        <span className={`text-xs font-semibold ${textColor}`}>{pct}%</span>
+      </div>
+      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full transition-all duration-300 ${barColor}`} style={{ width: `${pct}%` }}/>
+      </div>
+    </div>
   );
 }
 
@@ -91,19 +109,11 @@ function Top10MatchChart({ jobs, matchMap, onJobClick }) {
 
 // ── Job Card ───────────────────────────────────────────────────
 function JobCard({ job, matchScore, onClick }) {
-  const [expanded, setExpanded] = useState(false);
-  const desc    = job.description || "";
-  const isLong  = desc.length > 110;
-  const preview = isLong && !expanded ? desc.slice(0, 110) + "…" : desc;
-
   return (
     <div onClick={() => onClick(job)} className="card cursor-pointer hover:shadow-md transition-shadow flex flex-col gap-2">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            <h3 className="font-semibold text-gray-900 text-sm leading-snug">{job.title}</h3>
-            <MatchBadge score={matchScore}/>
-          </div>
+          <h3 className="font-semibold text-gray-900 text-sm leading-snug mb-1">{job.title}</h3>
           <div className="flex items-center gap-1 text-xs text-gray-500 mb-2">
             <Building2 size={12}/><span className="font-medium text-gray-700">{job.company}</span>
           </div>
@@ -112,26 +122,12 @@ function JobCard({ job, matchScore, onClick }) {
             {job.job_type  && <span className="flex items-center gap-1"><Clock size={11}/>{job.job_type}</span>}
             {job.industry  && <span className="flex items-center gap-1"><Briefcase size={11}/>{job.industry}</span>}
           </div>
+          {matchScore && <MatchBar score={matchScore}/>}
         </div>
         <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
           <Briefcase size={18} className="text-blue-600"/>
         </div>
       </div>
-
-      {/* Truncated description */}
-      {desc && (
-        <div onClick={e => e.stopPropagation()}>
-          <p className="text-xs text-gray-500 leading-relaxed">{preview}</p>
-          {isLong && (
-            <button
-              onClick={e => { e.stopPropagation(); setExpanded(v => !v); }}
-              className="flex items-center gap-0.5 text-xs text-blue-600 hover:underline mt-1"
-            >
-              {expanded ? <><ChevronUp size={11}/>Show less</> : <><ChevronDown size={11}/>Read more</>}
-            </button>
-          )}
-        </div>
-      )}
 
       {(job.salary_min || job.salary_max) && (
         <p className="text-xs text-green-700 font-medium">
@@ -139,7 +135,7 @@ function JobCard({ job, matchScore, onClick }) {
           {job.salary_max ? ` – ₱ ${Number(job.salary_max).toLocaleString()}` : "+"}
         </p>
       )}
-      <div className="flex items-center justify-between mt-auto">
+      <div className="flex items-center justify-between mt-auto pt-1 border-t border-gray-50">
         {job.profiles ? (
           <Link to={`/profile/${job.posted_by}`} onClick={e => e.stopPropagation()}
             className="flex items-center gap-1 text-xs text-blue-600 hover:underline">
@@ -367,7 +363,19 @@ export default function JobsPage() {
   const [selectedJob, setSelectedJob] = useState(null);
   const [showPost, setShowPost]       = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [viewMode, setViewMode]       = useState("all"); // "all" | "others"
   const debounceRef = useRef(null);
+
+  const top10Ids = useMemo(() => {
+    if (profile?.role !== "alumni" || Object.keys(matchMap).length === 0) return new Set();
+    return new Set(
+      [...jobs]
+        .filter(j => matchMap[j.id] > 0)
+        .sort((a, b) => (matchMap[b.id] || 0) - (matchMap[a.id] || 0))
+        .slice(0, 10)
+        .map(j => j.id)
+    );
+  }, [jobs, matchMap, profile]);
 
   useEffect(() => {
     if (profile?.role === "alumni") {
@@ -470,28 +478,43 @@ export default function JobsPage() {
         </div>
       )}
 
-      {/* AI Banner */}
+      {/* AI Banner + View Toggle */}
       {hasMatches && (
-        <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700">
-          <Sparkles size={16}/> AI match scores shown on each listing are based on your profile.
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700">
+            <Sparkles size={16}/> AI match scores shown on each listing are based on your profile.
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setViewMode("all")}
+              className={`text-sm px-4 py-1.5 rounded-lg font-medium transition-colors ${viewMode === "all" ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+            >All Jobs</button>
+            <button
+              onClick={() => setViewMode("others")}
+              className={`text-sm px-4 py-1.5 rounded-lg font-medium transition-colors ${viewMode === "others" ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+            >Other Listings</button>
+          </div>
         </div>
       )}
 
       {/* Jobs Grid */}
-      {loading ? (
-        <div className="flex items-center justify-center h-48"><Loader2 size={24} className="animate-spin text-blue-600"/></div>
-      ) : jobs.length === 0 ? (
-        <div className="card text-center py-16 text-gray-400">
-          <BookmarkPlus size={36} className="mx-auto mb-3 opacity-40"/>
-          <p className="text-sm">No job listings found.</p>
-        </div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {jobs.map(job => (
-            <JobCard key={job.id} job={job} matchScore={matchMap[job.id]} onClick={setSelectedJob}/>
-          ))}
-        </div>
-      )}
+      {(() => {
+        const displayedJobs = viewMode === "others" ? jobs.filter(j => !top10Ids.has(j.id)) : jobs;
+        return loading ? (
+          <div className="flex items-center justify-center h-48"><Loader2 size={24} className="animate-spin text-blue-600"/></div>
+        ) : displayedJobs.length === 0 ? (
+          <div className="card text-center py-16 text-gray-400">
+            <BookmarkPlus size={36} className="mx-auto mb-3 opacity-40"/>
+            <p className="text-sm">{viewMode === "others" ? "No other listings outside your top 10 matches." : "No job listings found."}</p>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {displayedJobs.map(job => (
+              <JobCard key={job.id} job={job} matchScore={matchMap[job.id]} onClick={setSelectedJob}/>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* Pagination */}
       {totalPages > 1 && (
