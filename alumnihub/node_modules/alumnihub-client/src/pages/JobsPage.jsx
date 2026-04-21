@@ -204,20 +204,31 @@ function JobDetailModal({ job, matchScore, onClose }) {
 
           {/* Posted by */}
           {job.profiles && (
-            <div className="flex items-center gap-2 pt-1 border-t border-gray-100">
-              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
-                {job.profiles.avatar_url
-                  ? <img src={job.profiles.avatar_url} className="w-8 h-8 rounded-full object-cover" alt=""/>
-                  : `${job.profiles.first_name?.[0]}${job.profiles.last_name?.[0]}`}
+            <div className="flex items-center justify-between pt-3 mt-1 border-t border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
+                  {job.profiles.avatar_url
+                    ? <img src={job.profiles.avatar_url} className="w-10 h-10 rounded-full object-cover" alt="Profile"/>
+                    : `${job.profiles.first_name?.[0] || ""}${job.profiles.last_name?.[0] || ""}`.toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-[11px] text-gray-400 uppercase tracking-widest font-semibold mb-0.5">Posted By</p>
+                  <div className="flex items-end gap-2">
+                    <Link to={`/profile/${job.posted_by}`} onClick={onClose}
+                      className="text-sm font-bold text-gray-900 hover:text-blue-600 transition-colors">
+                      {job.profiles.first_name} {job.profiles.last_name}
+                    </Link>
+                    <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full capitalize font-medium mb-px">
+                      {job.profiles.role}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-gray-400">Posted by</p>
-                <Link to={`/profile/${job.posted_by}`} onClick={onClose}
-                  className="text-sm font-medium text-blue-600 hover:underline">
-                  {job.profiles.first_name} {job.profiles.last_name}
-                </Link>
-                <span className="ml-2 text-xs text-gray-400 capitalize">{job.profiles.role}</span>
-              </div>
+              
+              <Link to={`/profile/${job.posted_by}`} onClick={onClose}
+                className="btn-secondary inline-flex items-center gap-1.5 text-xs py-1.5 px-3">
+                <User size={13}/> View Profile
+              </Link>
             </div>
           )}
 
