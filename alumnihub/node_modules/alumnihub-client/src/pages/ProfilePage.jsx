@@ -84,7 +84,8 @@ function SectionHeader({ icon: Icon, title, action }) {
 }
 
 function Field({ label, value, editing, name, onChange, type = "text", options, textarea, placeholder, isRequired }) {
-  const displayLabel = editing && isRequired ? <>{label} <span className="text-red-500">*</span></> : label;
+  const isEmpty = !value || String(value).trim() === "";
+  const displayLabel = editing && isRequired && isEmpty ? <>{label} <span className="text-red-500">*</span></> : label;
 
   if (!editing) {
     return (
@@ -447,15 +448,18 @@ export default function ProfilePage() {
   async function handleSave() {
     setSaving(true); setSaveError(""); setSaveSuccess(false);
 
-    // Validation for student account
-    if (profile?.role === "student") {
+    // Validation for student and alumni accounts
+    if (profile?.role === "student" || profile?.role === "alumni") {
       const requiredFields = [
         "first_name", "last_name", "phone", "date_of_birth", "gender", "city", "address",
         "student_number", "graduation_year", "batch_year", "department", "program"
       ];
+      if (profile?.role === "alumni") {
+        requiredFields.push("current_job_title", "current_company", "industry");
+      }
       const missingFields = requiredFields.filter(f => !form[f] || String(form[f]).trim() === "");
       if (missingFields.length > 0) {
-        setSaveError("Please fill out all required fields marked with * in Personal and Academic Information before saving.");
+        setSaveError("Please fill out all missing fields marked with * before saving.");
         setSaving(false);
         return;
       }
@@ -818,15 +822,15 @@ export default function ProfilePage() {
       <div className="card">
         <SectionHeader icon={User} title="Personal Information" />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="First Name"    value={form.first_name}   editing={editing} name="first_name"   onChange={handleFieldChange} placeholder="Juan" isRequired={profile?.role === "student"} />
-          <Field label="Last Name"     value={form.last_name}    editing={editing} name="last_name"    onChange={handleFieldChange} placeholder="Dela Cruz" isRequired={profile?.role === "student"} />
-          <Field label="Phone"         value={form.phone}        editing={editing} name="phone"        onChange={handleFieldChange} type="tel" placeholder="+63 912 345 6789" isRequired={profile?.role === "student"} />
-          <Field label="Date of Birth" value={form.date_of_birth} editing={editing} name="date_of_birth" onChange={handleFieldChange} type="date" isRequired={profile?.role === "student"} />
+          <Field label="First Name"    value={form.first_name}   editing={editing} name="first_name"   onChange={handleFieldChange} placeholder="Juan" isRequired={profile?.role === "student" || profile?.role === "alumni"} />
+          <Field label="Last Name"     value={form.last_name}    editing={editing} name="last_name"    onChange={handleFieldChange} placeholder="Dela Cruz" isRequired={profile?.role === "student" || profile?.role === "alumni"} />
+          <Field label="Phone"         value={form.phone}        editing={editing} name="phone"        onChange={handleFieldChange} type="tel" placeholder="+63 912 345 6789" isRequired={profile?.role === "student" || profile?.role === "alumni"} />
+          <Field label="Date of Birth" value={form.date_of_birth} editing={editing} name="date_of_birth" onChange={handleFieldChange} type="date" isRequired={profile?.role === "student" || profile?.role === "alumni"} />
           <Field label="Gender"        value={form.gender}       editing={editing} name="gender"       onChange={handleFieldChange}
-            options={["Male", "Female", "Non-binary", "Prefer not to say"]} isRequired={profile?.role === "student"} />
-          <Field label="City"          value={form.city}         editing={editing} name="city"         onChange={handleFieldChange} placeholder="Quezon City" isRequired={profile?.role === "student"} />
+            options={["Male", "Female", "Non-binary", "Prefer not to say"]} isRequired={profile?.role === "student" || profile?.role === "alumni"} />
+          <Field label="City"          value={form.city}         editing={editing} name="city"         onChange={handleFieldChange} placeholder="Quezon City" isRequired={profile?.role === "student" || profile?.role === "alumni"} />
           <div className="sm:col-span-2">
-            <Field label="Address"     value={form.address}      editing={editing} name="address"      onChange={handleFieldChange} placeholder="Street, Barangay" isRequired={profile?.role === "student"} />
+            <Field label="Address"     value={form.address}      editing={editing} name="address"      onChange={handleFieldChange} placeholder="Street, Barangay" isRequired={profile?.role === "student" || profile?.role === "alumni"} />
           </div>
           <div className="sm:col-span-2">
             <Field label="Email"       value={profile.email}     editing={false} name="email" />
@@ -842,12 +846,12 @@ export default function ProfilePage() {
         <div className="card">
           <SectionHeader icon={GraduationCap} title="Academic Information" />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Student Number"   value={form.student_number}  editing={editing} name="student_number"  onChange={handleFieldChange} placeholder="XXXX-XXXXX-MN-X" isRequired={profile?.role === "student"} />
-            <Field label="Graduation Year"  value={form.graduation_year} editing={editing} name="graduation_year" onChange={handleFieldChange} type="number" placeholder="2023" isRequired={profile?.role === "student"} />
-            <Field label="Batch Year"       value={form.batch_year}      editing={editing} name="batch_year"      onChange={handleFieldChange} type="number" placeholder="2019" isRequired={profile?.role === "student"} />
-            <Field label="Department"       value={form.department}      editing={editing} name="department"      onChange={handleFieldChange} placeholder="College of IT" isRequired={profile?.role === "student"} />
+            <Field label="Student Number"   value={form.student_number}  editing={editing} name="student_number"  onChange={handleFieldChange} placeholder="XXXX-XXXXX-MN-X" isRequired={profile?.role === "student" || profile?.role === "alumni"} />
+            <Field label="Graduation Year"  value={form.graduation_year} editing={editing} name="graduation_year" onChange={handleFieldChange} type="number" placeholder="2023" isRequired={profile?.role === "student" || profile?.role === "alumni"} />
+            <Field label="Batch Year"       value={form.batch_year}      editing={editing} name="batch_year"      onChange={handleFieldChange} type="number" placeholder="2019" isRequired={profile?.role === "student" || profile?.role === "alumni"} />
+            <Field label="Department"       value={form.department}      editing={editing} name="department"      onChange={handleFieldChange} placeholder="College of IT" isRequired={profile?.role === "student" || profile?.role === "alumni"} />
             <div className="sm:col-span-2">
-              <Field label="Program" value={form.program} editing={editing} name="program" onChange={handleFieldChange} options={PROGRAMS} isRequired={profile?.role === "student"} />
+              <Field label="Program" value={form.program} editing={editing} name="program" onChange={handleFieldChange} options={PROGRAMS} isRequired={profile?.role === "student" || profile?.role === "alumni"} />
             </div>
           </div>
         </div>
@@ -858,9 +862,9 @@ export default function ProfilePage() {
         <div className="card">
           <SectionHeader icon={Briefcase} title="Professional Information" />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Current Job Title"  value={form.current_job_title} editing={editing} name="current_job_title" onChange={handleFieldChange} placeholder="Software Engineer" />
-            <Field label="Current Company"    value={form.current_company}   editing={editing} name="current_company"   onChange={handleFieldChange} placeholder="Accenture Philippines" />
-            <Field label="Industry"           value={form.industry}          editing={editing} name="industry"          onChange={handleFieldChange} options={INDUSTRIES} />
+            <Field label="Current Job Title"  value={form.current_job_title} editing={editing} name="current_job_title" onChange={handleFieldChange} placeholder="Software Engineer" isRequired={profile?.role === "alumni"} />
+            <Field label="Current Company"    value={form.current_company}   editing={editing} name="current_company"   onChange={handleFieldChange} placeholder="Accenture Philippines" isRequired={profile?.role === "alumni"} />
+            <Field label="Industry"           value={form.industry}          editing={editing} name="industry"          onChange={handleFieldChange} options={INDUSTRIES} isRequired={profile?.role === "alumni"} />
           </div>
         </div>
       )}
