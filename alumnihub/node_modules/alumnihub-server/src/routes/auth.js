@@ -28,7 +28,7 @@ router.post("/register", async (req, res, next) => {
       return res.status(400).json({ error: "Email and password are required" });
     }
 
-    const validRoles = ["alumni", "faculty", "admin", "student"];
+    const validRoles = ["alumni", "admin", "student"];
     if (!validRoles.includes(role)) {
       return res.status(400).json({ error: "Invalid role" });
     }

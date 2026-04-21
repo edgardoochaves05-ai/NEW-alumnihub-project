@@ -123,21 +123,21 @@ export default function CurriculumImpactPage() {
 
           {/* Stat Badges */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <StatBadge label="Graduates Analyzed" value={report.total_alumni_analyzed?.toLocaleString()} color="bg-blue-50 text-blue-700"/>
+            <StatBadge label="Graduates Analyzed" value={report.totalGraduates?.toLocaleString()} color="bg-blue-50 text-blue-700"/>
             <StatBadge label="Employment Rate"
-              value={report.employment_rate != null ? `${report.employment_rate}%` : null}
+              value={report.employmentRate != null ? `${Math.round(report.employmentRate * 100)}%` : null}
               color="bg-green-50 text-green-700"/>
             <StatBadge label="Avg. Progression Score"
-              value={report.avg_career_progression_score != null ? `${report.avg_career_progression_score}` : null}
+              value={report.avgProgressionScore != null ? `${Math.round(report.avgProgressionScore * 100)}%` : null}
               color="bg-amber-50 text-amber-700"/>
             <StatBadge label="Industries Represented"
-              value={report.top_industries?.length}
+              value={report.industries?.length ?? report.topIndustries?.length}
               color="bg-purple-50 text-purple-700"/>
           </div>
 
           {/* Industry Distribution */}
-          {report.top_industries?.length > 0 && (() => {
-            const industryData = report.top_industries;
+          {(report.industryDistribution || report.industries || report.topIndustries)?.length > 0 && (() => {
+            const industryData = report.industryDistribution || report.industries || report.topIndustries;
             return (
               <div className="card">
                 <h2 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
@@ -146,7 +146,7 @@ export default function CurriculumImpactPage() {
                 <div className="flex items-center gap-6 flex-wrap">
                   <ResponsiveContainer width="50%" height={200} minWidth={180}>
                     <PieChart>
-                      <Pie data={industryData} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={80} paddingAngle={2}>
+                      <Pie data={industryData} dataKey="count" nameKey="industry" cx="50%" cy="50%" outerRadius={80} paddingAngle={2}>
                         {industryData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]}/>)}
                       </Pie>
                       <Tooltip/>
@@ -156,7 +156,7 @@ export default function CurriculumImpactPage() {
                     {industryData.slice(0, 8).map((d, i) => (
                       <div key={i} className="flex items-center gap-2 text-xs text-gray-600">
                         <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}/>
-                        <span className="truncate">{d.name}</span>
+                        <span className="truncate">{d.industry}</span>
                         <span className="ml-auto font-medium text-gray-900 flex-shrink-0">{d.count}</span>
                       </div>
                     ))}
@@ -167,15 +167,15 @@ export default function CurriculumImpactPage() {
           })()}
 
           {/* Top Job Titles */}
-          {report.top_job_titles?.length > 0 && (
+          {(report.topJobTitles || report.jobTitles)?.length > 0 && (
             <div className="card">
               <h2 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 <TrendingUp size={15} className="text-blue-600"/>Top Job Titles
               </h2>
               <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={report.top_job_titles.slice(0, 10)} margin={{ top: 5, right: 10, left: 0, bottom: 60 }}>
+                <BarChart data={(report.topJobTitles || report.jobTitles).slice(0, 10)} margin={{ top: 5, right: 10, left: 0, bottom: 60 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
-                  <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-35} textAnchor="end" interval={0}/>
+                  <XAxis dataKey="title" tick={{ fontSize: 10 }} angle={-35} textAnchor="end" interval={0}/>
                   <YAxis tick={{ fontSize: 11 }}/>
                   <Tooltip/>
                   <Bar dataKey="count" fill="#10b981" radius={[4,4,0,0]} name="Graduates"/>
@@ -185,22 +185,22 @@ export default function CurriculumImpactPage() {
           )}
 
           {/* Top Skills */}
-          {report.skills_demand_alignment?.length > 0 && (
+          {(report.topSkills || report.skills)?.length > 0 && (
             <div className="card">
               <h2 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 <Users size={15} className="text-blue-600"/>Most Common Skills
               </h2>
               <div className="space-y-3">
-                {report.skills_demand_alignment.slice(0, 10).map((s, i) => {
-                  const max = report.skills_demand_alignment[0]?.alumni_count || 1;
-                  const pct = Math.round((s.alumni_count / max) * 100);
+                {(report.topSkills || report.skills).slice(0, 10).map((s, i) => {
+                  const max = (report.topSkills || report.skills)[0]?.count || 1;
+                  const pct = Math.round((s.count / max) * 100);
                   return (
                     <div key={i} className="flex items-center gap-3">
                       <span className="text-xs text-gray-700 w-40 truncate">{s.skill}</span>
                       <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                         <div className="h-full bg-blue-500 rounded-full" style={{ width: `${pct}%` }}/>
                       </div>
-                      <span className="text-xs text-gray-500 w-8 text-right">{s.alumni_count}</span>
+                      <span className="text-xs text-gray-500 w-8 text-right">{s.count}</span>
                     </div>
                   );
                 })}
@@ -209,15 +209,15 @@ export default function CurriculumImpactPage() {
           )}
 
           {/* Top Companies */}
-          {report.top_companies?.length > 0 && (
+          {(report.topCompanies || report.companies)?.length > 0 && (
             <div className="card">
               <h2 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 <Briefcase size={15} className="text-blue-600"/>Top Employers
               </h2>
               <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={report.top_companies.slice(0, 8)} margin={{ top: 5, right: 10, left: 0, bottom: 50 }}>
+                <BarChart data={(report.topCompanies || report.companies).slice(0, 8)} margin={{ top: 5, right: 10, left: 0, bottom: 50 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
-                  <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-30} textAnchor="end" interval={0}/>
+                  <XAxis dataKey="company" tick={{ fontSize: 10 }} angle={-30} textAnchor="end" interval={0}/>
                   <YAxis tick={{ fontSize: 11 }}/>
                   <Tooltip/>
                   <Bar dataKey="count" fill="#8b5cf6" radius={[4,4,0,0]} name="Alumni"/>

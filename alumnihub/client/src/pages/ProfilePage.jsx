@@ -14,14 +14,6 @@ import {
 } from "lucide-react";
 
 // ── Constants ──────────────────────────────────────────────────
-const REQUIRED_PERSONAL  = ["first_name", "last_name", "phone", "date_of_birth", "gender", "city", "address"];
-const REQUIRED_ACADEMIC  = ["student_number", "program", "department", "graduation_year", "batch_year"];
-
-function getRequiredFields(role) {
-  const needsAcademic = role === "alumni" || role === "student";
-  return [...REQUIRED_PERSONAL, ...(needsAcademic ? REQUIRED_ACADEMIC : [])];
-}
-
 const MILESTONE_TYPES = ["job", "promotion", "certification", "award", "education", "other"];
 const MILESTONE_COLORS = {
   job:           { bg: "bg-blue-100",   text: "text-blue-700",   icon: Briefcase },
@@ -91,48 +83,40 @@ function SectionHeader({ icon: Icon, title, action }) {
   );
 }
 
-function Field({ label, value, editing, name, onChange, type = "text", options, textarea, placeholder, required }) {
-  const isEmpty = required && editing && !value?.toString().trim();
-  const labelEl = (
-    <span>{label}{required && <span className="text-red-500 ml-0.5">*</span>}</span>
-  );
+function Field({ label, value, editing, name, onChange, type = "text", options, textarea, placeholder }) {
   if (!editing) {
     return (
       <div>
-        <p className="label">{labelEl}</p>
+        <p className="label">{label}</p>
         <p className="text-sm text-gray-800 min-h-[1.5rem]">{value || <span className="text-gray-400 italic">Not set</span>}</p>
       </div>
     );
   }
-  const errorCls = isEmpty ? "border-red-400 focus:ring-red-300" : "";
   if (options) {
     return (
       <div>
-        <label className="label">{labelEl}</label>
-        <select name={name} value={value} onChange={onChange} className={`input-field bg-white ${errorCls}`}>
+        <label className="label">{label}</label>
+        <select name={name} value={value} onChange={onChange} className="input-field bg-white">
           <option value="">— Select —</option>
           {options.map((o) => <option key={o} value={o}>{o}</option>)}
         </select>
-        {isEmpty && <p className="text-xs text-red-500 mt-1">This field is required.</p>}
       </div>
     );
   }
   if (textarea) {
     return (
       <div>
-        <label className="label">{labelEl}</label>
+        <label className="label">{label}</label>
         <textarea name={name} value={value} onChange={onChange} rows={3}
-          className={`input-field resize-none ${errorCls}`} placeholder={placeholder} />
-        {isEmpty && <p className="text-xs text-red-500 mt-1">This field is required.</p>}
+          className="input-field resize-none" placeholder={placeholder} />
       </div>
     );
   }
   return (
     <div>
-      <label className="label">{labelEl}</label>
+      <label className="label">{label}</label>
       <input type={type} name={name} value={value} onChange={onChange}
-        className={`input-field ${errorCls}`} placeholder={placeholder} />
-      {isEmpty && <p className="text-xs text-red-500 mt-1">This field is required.</p>}
+        className="input-field" placeholder={placeholder} />
     </div>
   );
 }
@@ -458,16 +442,8 @@ export default function ProfilePage() {
   };
   const removeSkill = (s) => setForm((p) => ({ ...p, skills: p.skills.filter((x) => x !== s) }));
 
-  const requiredFields = getRequiredFields(profile?.role);
-  const isFormValid = requiredFields.every(f => form[f]?.toString().trim());
-
   async function handleSave() {
-    setSaveError(""); setSaveSuccess(false);
-    if (!isFormValid) {
-      setSaveError("Please fill in all required fields (marked with *).");
-      return;
-    }
-    setSaving(true);
+    setSaving(true); setSaveError(""); setSaveSuccess(false);
     try {
       let avatarUrl = form.avatar_url;
 
@@ -763,7 +739,7 @@ export default function ProfilePage() {
                   <button onClick={handleCancelEdit} className="btn-secondary flex items-center gap-2 text-sm">
                     <X size={14} /> Cancel
                   </button>
-                  <button onClick={handleSave} disabled={saving || !isFormValid} className="btn-primary flex items-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                  <button onClick={handleSave} disabled={saving} className="btn-primary flex items-center gap-2 text-sm">
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                     Save
                   </button>
@@ -825,15 +801,15 @@ export default function ProfilePage() {
       <div className="card">
         <SectionHeader icon={User} title="Personal Information" />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="First Name"    value={form.first_name}    editing={editing} name="first_name"    onChange={handleFieldChange} placeholder="Juan"                  required />
-          <Field label="Last Name"     value={form.last_name}     editing={editing} name="last_name"     onChange={handleFieldChange} placeholder="Dela Cruz"             required />
-          <Field label="Phone"         value={form.phone}         editing={editing} name="phone"         onChange={handleFieldChange} type="tel" placeholder="+63 912 345 6789" required />
-          <Field label="Date of Birth" value={form.date_of_birth} editing={editing} name="date_of_birth" onChange={handleFieldChange} type="date"                         required />
-          <Field label="Gender"        value={form.gender}        editing={editing} name="gender"        onChange={handleFieldChange}
-            options={["Male", "Female", "Non-binary", "Prefer not to say"]} required />
-          <Field label="City"          value={form.city}          editing={editing} name="city"          onChange={handleFieldChange} placeholder="Quezon City"            required />
+          <Field label="First Name"    value={form.first_name}   editing={editing} name="first_name"   onChange={handleFieldChange} placeholder="Juan" />
+          <Field label="Last Name"     value={form.last_name}    editing={editing} name="last_name"    onChange={handleFieldChange} placeholder="Dela Cruz" />
+          <Field label="Phone"         value={form.phone}        editing={editing} name="phone"        onChange={handleFieldChange} type="tel" placeholder="+63 912 345 6789" />
+          <Field label="Date of Birth" value={form.date_of_birth} editing={editing} name="date_of_birth" onChange={handleFieldChange} type="date" />
+          <Field label="Gender"        value={form.gender}       editing={editing} name="gender"       onChange={handleFieldChange}
+            options={["Male", "Female", "Non-binary", "Prefer not to say"]} />
+          <Field label="City"          value={form.city}         editing={editing} name="city"         onChange={handleFieldChange} placeholder="Quezon City" />
           <div className="sm:col-span-2">
-            <Field label="Address"     value={form.address}       editing={editing} name="address"       onChange={handleFieldChange} placeholder="Street, Barangay"       required />
+            <Field label="Address"     value={form.address}      editing={editing} name="address"      onChange={handleFieldChange} placeholder="Street, Barangay" />
           </div>
           <div className="sm:col-span-2">
             <Field label="Email"       value={profile.email}     editing={false} name="email" />
@@ -849,12 +825,12 @@ export default function ProfilePage() {
         <div className="card">
           <SectionHeader icon={GraduationCap} title="Academic Information" />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Student Number"   value={form.student_number}  editing={editing} name="student_number"  onChange={handleFieldChange} placeholder="XXXX-XXXXX-MN-X" required />
-            <Field label="Graduation Year"  value={form.graduation_year} editing={editing} name="graduation_year" onChange={handleFieldChange} type="number" placeholder="2023" required />
-            <Field label="Batch Year"       value={form.batch_year}      editing={editing} name="batch_year"      onChange={handleFieldChange} type="number" placeholder="2019" required />
-            <Field label="Department"       value={form.department}      editing={editing} name="department"      onChange={handleFieldChange} placeholder="College of IT"     required />
+            <Field label="Student Number"   value={form.student_number}  editing={editing} name="student_number"  onChange={handleFieldChange} placeholder="XXXX-XXXXX-MN-X" />
+            <Field label="Graduation Year"  value={form.graduation_year} editing={editing} name="graduation_year" onChange={handleFieldChange} type="number" placeholder="2023" />
+            <Field label="Batch Year"       value={form.batch_year}      editing={editing} name="batch_year"      onChange={handleFieldChange} type="number" placeholder="2019" />
+            <Field label="Department"       value={form.department}      editing={editing} name="department"      onChange={handleFieldChange} placeholder="College of IT" />
             <div className="sm:col-span-2">
-              <Field label="Program" value={form.program} editing={editing} name="program" onChange={handleFieldChange} options={PROGRAMS} required />
+              <Field label="Program" value={form.program} editing={editing} name="program" onChange={handleFieldChange} options={PROGRAMS} />
             </div>
           </div>
         </div>

@@ -40,8 +40,51 @@ router.get("/", authenticate, async (req, res, next) => {
   }
 });
 
-// ── POST /api/announcements (admin & faculty only) ─────────────
-router.post("/", authenticate, authorize("admin", "faculty"), async (req, res, next) => {
+// ── GET /api/announcements/:id/comments ───────────────────────
+router.get("/:id/comments", authenticate, async (req, res, next) => {
+  try {
+    const { data, error } = await supabase
+      .from("feedback")
+      .select("id, message, created_at, profiles!submitted_by(id, first_name, last_name, avatar_url, role)")
+      .eq("category", "announcement_comment")
+      .eq("subject", `announcement_${req.params.id}`)
+      .order("created_at", { ascending: true });
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── POST /api/announcements/:id/comments ──────────────────────
+router.post("/:id/comments", authenticate, async (req, res, next) => {
+  try {
+    const { message } = req.body;
+    if (!message?.trim()) {
+      return res.status(400).json({ error: "Comment cannot be empty." });
+    }
+
+    const { data, error } = await supabase
+      .from("feedback")
+      .insert({
+        submitted_by: req.user.id,
+        category: "announcement_comment",
+        subject: `announcement_${req.params.id}`,
+        message: message.trim(),
+      })
+      .select("id, message, created_at, profiles!submitted_by(id, first_name, last_name, avatar_url, role)")
+      .single();
+
+    if (error) throw error;
+    res.status(201).json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── POST /api/announcements (admin only) ──────────────────────
+router.post("/", authenticate, authorize("admin"), async (req, res, next) => {
   try {
     const { title, content, category, target_audience = "all" } = req.body;
 
