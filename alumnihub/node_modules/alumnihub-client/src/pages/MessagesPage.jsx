@@ -239,10 +239,12 @@ export default function MessagesPage() {
     const text = msgText.trim();
     setMsgText("");
     try {
-      const { data } = await api.post("/messages", { conversation_id: activeConv.id, content: text });
-      setMessages(prev => [...prev, { ...data, created_at: data.created_at || new Date().toISOString() }]);
+      const { data } = await api.post("/messages", { conversationId: activeConv.id, content: text });
+      // Backend returns { message, conversationId } — extract the message object
+      const newMsg = data.message || data;
+      setMessages(prev => [...prev, { ...newMsg, created_at: newMsg.created_at || new Date().toISOString() }]);
       setConversations(prev => prev.map(c => c.id === activeConv.id
-        ? { ...c, last_message: text, last_message_at: data.created_at }
+        ? { ...c, last_message: text, last_message_at: newMsg.created_at }
         : c));
     } catch(e) { console.error(e); setMsgText(text); }
     finally { setSending(false); }
