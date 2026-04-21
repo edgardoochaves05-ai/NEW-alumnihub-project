@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis,
-  CartesianGrid, Tooltip, ResponsiveContainer, Cell,
+  CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList,
 } from "recharts";
 import {
   Users, Briefcase, TrendingUp,
@@ -469,6 +469,48 @@ function FacultyAdminDashboard({ profile }) {
           )}
         </div>
       </div>
+
+      {/* Alumni per Program — full width bar chart */}
+      {topPrograms.length > 0 && (
+        <div className="card">
+          <h2 className="font-semibold text-gray-900 mb-1">Alumni per Program</h2>
+          <p className="text-xs text-gray-500 mb-4">Total number of registered alumni in each program</p>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart
+              data={topPrograms}
+              margin={{ top: 24, right: 16, left: -20, bottom: 48 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis
+                dataKey="program"
+                tick={{ fontSize: 10 }}
+                angle={-30}
+                textAnchor="end"
+                interval={0}
+                tickFormatter={(v) => v.replace("BS ", "").replace("Bachelor of Science in ", "")}
+              />
+              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+              <Tooltip
+                formatter={(v, _name, props) => [
+                  `${v} alumni`,
+                  props.payload?.program,
+                ]}
+              />
+              <Bar dataKey="total" radius={[4, 4, 0, 0]} name="Alumni">
+                {topPrograms.map((_, i) => (
+                  <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                ))}
+                {/* Exact count label on top of each bar */}
+                <LabelList
+                  dataKey="total"
+                  position="top"
+                  style={{ fontSize: 12, fontWeight: 700, fill: "#374151" }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       {/* Bottom row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

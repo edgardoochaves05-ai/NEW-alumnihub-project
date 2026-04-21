@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../services/api";
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList
 } from "recharts";
 import { Users, Briefcase, TrendingUp, GraduationCap, Loader2, RefreshCw, Eye, Send, ChevronUp, ChevronDown } from "lucide-react";
 
@@ -164,6 +164,49 @@ export default function ReportsPage() {
           </div>
         )}
       </div>
+
+      {/* Alumni per Program — vertical bar chart with count labels */}
+      {(() => {
+        const programStats = stats?.programStats || [];
+        if (programStats.length === 0) return null;
+        const COLORS = ["#2563eb","#16a34a","#9333ea","#d97706","#dc2626","#0891b2","#db2777","#65a30d"];
+        return (
+          <div className="card">
+            <h2 className="text-base font-semibold text-gray-900 mb-1">Alumni per Program</h2>
+            <p className="text-xs text-gray-400 mb-4">Total number of registered alumni in each department / program</p>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart
+                data={programStats}
+                margin={{ top: 28, right: 16, left: 0, bottom: 56 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis
+                  dataKey="program"
+                  tick={{ fontSize: 10 }}
+                  angle={-30}
+                  textAnchor="end"
+                  interval={0}
+                  tickFormatter={(v) => v.replace("BS ", "").replace("Bachelor of Science in ", "")}
+                />
+                <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                <Tooltip
+                  formatter={(v, _name, props) => [`${v} alumni`, props.payload?.program]}
+                />
+                <Bar dataKey="total" radius={[4, 4, 0, 0]} name="Alumni">
+                  {programStats.map((_, i) => (
+                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                  ))}
+                  <LabelList
+                    dataKey="total"
+                    position="top"
+                    style={{ fontSize: 12, fontWeight: 700, fill: "#374151" }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        );
+      })()}
 
       {/* Employment Trend Table */}
       {trends.length > 0 && (
