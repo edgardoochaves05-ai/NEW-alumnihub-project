@@ -134,6 +134,58 @@ router.get("/programs", authenticate, authorize("admin"), async (req, res, next)
   }
 });
 
+// ── Job Posting Metrics (Admin only) ──
+router.get("/job-metrics", authenticate, authorize("admin"), async (req, res, next) => {
+  try {
+    const { limit = 10 } = req.query;
+
+    // Fetch all interactions and active jobs in parallel
+    const [{ data: interactions }, { data: activeJobs }] = await Promise.all([
+      supabase.from("job_interactions").select("job_id, interaction_type"),
+      supabase
+        .from("job_listings")
+        .select("id, title, company, industry, job_type, created_at, is_active, posted_by")
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(100),
+    ]);
+
+    // Aggregate counts per job
+    const counts = {};
+    for (const { job_id, interaction_type } of interactions || []) {
+      if (!counts[job_id]) counts[job_id] = { views: 0, inquiries: 0 };
+      if (interaction_type === "view")    counts[job_id].views++;
+      if (interaction_type === "inquiry") counts[job_id].inquiries++;
+    }
+
+    // Merge metrics into job records
+    const allJobs = (activeJobs || []).map(job => ({
+      ...job,
+      views:      counts[job.id]?.views    || 0,
+      inquiries:  counts[job.id]?.inquiries || 0,
+      engagement: (counts[job.id]?.views || 0) + (counts[job.id]?.inquiries || 0),
+    }));
+
+    const totalViews     = Object.values(counts).reduce((s, c) => s + c.views, 0);
+    const totalInquiries = Object.values(counts).reduce((s, c) => s + c.inquiries, 0);
+
+    const top = (field) =>
+      [...allJobs].sort((a, b) => b[field] - a[field]).slice(0, parseInt(limit));
+
+    res.json({
+      summary: {
+        totalViews,
+        totalInquiries,
+        totalActiveJobs: allJobs.length,
+      },
+      topByViews:      top("views"),
+      topByInquiries:  top("inquiries"),
+      topByEngagement: top("engagement"),
+      allJobs,
+    });
+  } catch (err) { next(err); }
+});
+
 // ── Employment Trends ──
 router.get("/employment-trends", authenticate, authorize("admin"), async (req, res, next) => {
   try {

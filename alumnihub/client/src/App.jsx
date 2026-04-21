@@ -16,6 +16,16 @@ import CareerPredictionPage from "./pages/CareerPredictionPage";
 import CurriculumImpactPage from "./pages/CurriculumImpactPage";
 import SettingsPage from "./pages/SettingsPage";
 import FacultyDirectoryPage from "./pages/FacultyDirectoryPage";
+import AdvisorRosterPage from "./pages/AdvisorRosterPage";
+import StudentCareerPathPage from "./pages/StudentCareerPathPage";
+import AdvisorManagementPage from "./pages/AdvisorManagementPage";
+
+// Redirect career_advisor from /dashboard → their roster
+function DashboardRoute() {
+  const { profile } = useAuth();
+  if (profile?.role === "career_advisor") return <Navigate to="/advisor/roster" replace />;
+  return <DashboardPage />;
+}
 
 // Protected route wrapper
 function ProtectedRoute({ children, allowedRoles }) {
@@ -42,7 +52,7 @@ function AppRoutes() {
       {/* Protected routes */}
       <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route index element={<Navigate to="/dashboard" />} />
-        <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="dashboard" element={<DashboardRoute />} />
 
         {/* Profile — Alumni and Student */}
         <Route
@@ -88,11 +98,11 @@ function AppRoutes() {
         {/* Jobs — all roles */}
         <Route path="jobs" element={<JobsPage />} />
 
-        {/* Inbox — Alumni, Student, and Admin */}
+        {/* Inbox — Alumni, Student, Admin, Career Advisor */}
         <Route
           path="messages"
           element={
-            <ProtectedRoute allowedRoles={["alumni", "student", "admin"]}>
+            <ProtectedRoute allowedRoles={["alumni", "student", "admin", "career_advisor"]}>
               <MessagesPage />
             </ProtectedRoute>
           }
@@ -102,8 +112,36 @@ function AppRoutes() {
         <Route
           path="settings"
           element={
-            <ProtectedRoute allowedRoles={["alumni", "student", "admin"]}>
+            <ProtectedRoute allowedRoles={["alumni", "student", "admin", "career_advisor"]}>
               <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Career Advisor — Roster & Student Detail */}
+        <Route
+          path="advisor/roster"
+          element={
+            <ProtectedRoute allowedRoles={["career_advisor"]}>
+              <AdvisorRosterPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="advisor/student/:id"
+          element={
+            <ProtectedRoute allowedRoles={["career_advisor"]}>
+              <StudentCareerPathPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Advisor Management — Admin only */}
+        <Route
+          path="advisor-management"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <AdvisorManagementPage />
             </ProtectedRoute>
           }
         />

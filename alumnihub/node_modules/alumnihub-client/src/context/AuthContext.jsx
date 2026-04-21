@@ -74,6 +74,7 @@ export function AuthProvider({ children }) {
     isAlumni: profile?.role === "alumni",
     isFaculty: profile?.role === "faculty",
     isAdmin: profile?.role === "admin",
+    isCareerAdvisor: profile?.role === "career_advisor",
     refreshProfile: () => user && fetchProfile(user),
   };
 

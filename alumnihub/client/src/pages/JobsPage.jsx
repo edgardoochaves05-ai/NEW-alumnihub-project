@@ -144,6 +144,15 @@ function JobCard({ job, onClick }) {
 
 // ── Job Detail Modal ───────────────────────────────────────────
 function JobDetailModal({ job, matchScore, onClose }) {
+  // Fire a unique view event whenever this modal opens for a different job
+  useEffect(() => {
+    if (job?.id) api.post(`/jobs/${job.id}/view`).catch(() => {});
+  }, [job?.id]);
+
+  const trackInquiry = () => {
+    if (job?.id) api.post(`/jobs/${job.id}/inquire`).catch(() => {});
+  };
+
   if (!job) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
@@ -217,12 +226,14 @@ function JobDetailModal({ job, matchScore, onClose }) {
             <div className="flex flex-wrap gap-3 pt-2 border-t border-gray-100">
               {job.application_url && (
                 <a href={job.application_url} target="_blank" rel="noreferrer"
+                  onClick={trackInquiry}
                   className="btn-primary inline-flex items-center gap-2 text-sm">
                   Visit Website <ExternalLink size={14}/>
                 </a>
               )}
               {job.application_email && (
                 <a href={`mailto:${job.application_email}`}
+                  onClick={trackInquiry}
                   className="btn-secondary inline-flex items-center gap-2 text-sm">
                   Apply via Email <Mail size={14}/>
                 </a>

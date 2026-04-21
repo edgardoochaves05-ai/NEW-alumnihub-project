@@ -227,6 +227,26 @@ router.post("/avatar", authenticate, async (req, res, next) => {
   }
 });
 
+// ── Assign role to a user (Admin only — career_advisor is set here, not on registration) ──
+router.patch("/:id/role", authenticate, authorize("admin"), async (req, res, next) => {
+  try {
+    const { role } = req.body;
+    const ALLOWED_ROLES = ["alumni", "student", "faculty", "career_advisor", "admin"];
+    if (!ALLOWED_ROLES.includes(role)) {
+      return res.status(400).json({ error: `Invalid role. Must be one of: ${ALLOWED_ROLES.join(", ")}` });
+    }
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({ role })
+      .eq("id", req.params.id)
+      .select("id, first_name, last_name, email, role")
+      .single();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: "Profile not found" });
+    res.json(data);
+  } catch (err) { next(err); }
+});
+
 // ── Verify alumni (Faculty/Admin) ──
 router.patch("/:id/verify", authenticate, authorize("admin"), async (req, res, next) => {
   try {
