@@ -4,7 +4,7 @@ import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList
 } from "recharts";
-import { Users, Briefcase, TrendingUp, GraduationCap, Loader2, RefreshCw, Eye, Send, ChevronUp, ChevronDown } from "lucide-react";
+import { Users, Briefcase, TrendingUp, GraduationCap, Loader2, RefreshCw, Eye, Send, ChevronUp, ChevronDown, Filter, X } from "lucide-react";
 
 const PIE_COLORS = ["#3b82f6","#10b981","#f59e0b","#ef4444","#8b5cf6","#ec4899","#06b6d4","#84cc16"];
 
@@ -28,8 +28,9 @@ export default function ReportsPage() {
   const [trends,     setTrends]     = useState([]);
   const [jobMetrics, setJobMetrics] = useState(null);
   const [loading,    setLoading]    = useState(true);
-  const [sortField,  setSortField]  = useState("engagement");
-  const [sortDir,    setSortDir]    = useState("desc");
+  const [sortField,     setSortField]     = useState("engagement");
+  const [sortDir,       setSortDir]       = useState("desc");
+  const [industryFilter, setIndustryFilter] = useState("");
 
   useEffect(() => { fetchAll(); }, []);
 
@@ -60,7 +61,16 @@ export default function ReportsPage() {
       : <ChevronUp size={12} className="text-blue-500 inline ml-1"/>;
   }
 
-  const sortedJobs = [...(jobMetrics?.allJobs || [])].sort((a, b) => {
+  // Unique industries from all jobs (for filter dropdown)
+  const allJobsList = jobMetrics?.allJobs || [];
+  const industries = [...new Set(allJobsList.map(j => j.industry).filter(Boolean))].sort();
+
+  // Apply industry filter then sort
+  const filteredJobs = industryFilter
+    ? allJobsList.filter(j => j.industry === industryFilter)
+    : allJobsList;
+
+  const sortedJobs = [...filteredJobs].sort((a, b) => {
     const diff = b[sortField] - a[sortField];
     return sortDir === "desc" ? diff : -diff;
   });
@@ -309,7 +319,43 @@ export default function ReportsPage() {
 
           {/* Full metrics table */}
           <div className="card">
-            <h2 className="text-base font-semibold text-gray-900 mb-4">All Active Listings — Detailed Metrics</h2>
+            <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+              <h2 className="text-base font-semibold text-gray-900">All Active Listings — Detailed Metrics</h2>
+              {/* Industry filter */}
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Filter size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
+                  <select
+                    value={industryFilter}
+                    onChange={e => setIndustryFilter(e.target.value)}
+                    className={`pl-8 pr-8 py-1.5 text-xs rounded-lg border ${
+                      industryFilter
+                        ? "border-blue-400 bg-blue-50 text-blue-700 font-medium"
+                        : "border-gray-200 bg-white text-gray-600"
+                    } focus:outline-none focus:ring-2 focus:ring-blue-300 cursor-pointer`}
+                  >
+                    <option value="">All Industries</option>
+                    {industries.map(ind => (
+                      <option key={ind} value={ind}>{ind}</option>
+                    ))}
+                  </select>
+                </div>
+                {industryFilter && (
+                  <button
+                    onClick={() => setIndustryFilter("")}
+                    className="flex items-center gap-1 text-xs text-gray-500 hover:text-red-500 transition-colors"
+                    title="Clear filter"
+                  >
+                    <X size={13}/> Clear
+                  </button>
+                )}
+                {industryFilter && (
+                  <span className="text-xs text-gray-400">
+                    {sortedJobs.length} of {allJobsList.length} listings
+                  </span>
+                )}
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
