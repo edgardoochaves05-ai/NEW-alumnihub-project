@@ -13,7 +13,7 @@ const navItems = [
   { to: "/faculty-directory", icon: Users,           label: "Faculty Directory",  roles: ["admin"] },
   { to: "/jobs",              icon: Briefcase,       label: "Jobs",               roles: ["alumni", "student", "faculty", "admin"] },
   { to: "/messages",          icon: Mail,            label: "Inbox",              roles: ["alumni", "student", "faculty"] },
-  { to: "/career-prediction", icon: TrendingUp,      label: "Career Prediction",  roles: ["faculty", "admin"] },
+  { to: "/career-prediction", icon: TrendingUp,      label: "Career Prediction",  roles: ["alumni"] },
   { to: "/reports",           icon: BarChart3,       label: "Reports",            roles: ["faculty", "admin"] },
   { to: "/curriculum-impact", icon: GraduationCap,   label: "Curriculum Impact",  roles: ["faculty", "admin"] },
   { to: "/settings",          icon: Settings,        label: "Settings",           roles: ["alumni", "student", "faculty", "admin"] },

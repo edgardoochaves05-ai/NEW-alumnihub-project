@@ -6,7 +6,7 @@ import { formatDistanceToNow } from "date-fns";
 import {
   Search, Filter, Briefcase, Building2, MapPin, Clock, Plus, X,
   ChevronLeft, ChevronRight, Loader2, Sparkles, ExternalLink,
-  BookmarkPlus, Calendar, GraduationCap, User
+  BookmarkPlus, Calendar, GraduationCap, User, RefreshCw, ChevronDown, ChevronUp,
 } from "lucide-react";
 
 const INDUSTRIES = ["Technology","Finance","Healthcare","Education","Engineering","Business","Government","Non-profit","Other"];
@@ -14,13 +14,101 @@ const JOB_TYPES  = ["full-time","part-time","contract","internship","remote"];
 const EXP_LEVELS = ["entry","mid","senior","executive"];
 
 function MatchBadge({ score }) {
-  if (!score) return null;
-  const pct = Math.round(score * 100);
+  if (score == null) return null;
+  const pct = score > 1 ? Math.round(score) : Math.round(score * 100);
   const color = pct >= 75 ? "bg-green-100 text-green-700" : pct >= 50 ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500";
   return (
     <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${color}`}>
       <Sparkles size={10}/>{pct}% match
     </span>
+  );
+}
+
+function ScoreBar({ label, value, color }) {
+  const pct = value > 1 ? Math.round(value) : Math.round((value || 0) * 100);
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-gray-500 w-20 flex-shrink-0">{label}</span>
+      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+        <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${pct}%` }}/>
+      </div>
+      <span className="text-xs text-gray-500 w-8 text-right flex-shrink-0">{pct}%</span>
+    </div>
+  );
+}
+
+function ReasonPanel({ matchingSkills, scoreBreakdown }) {
+  if (!matchingSkills?.length && !scoreBreakdown) return null;
+  return (
+    <div className="mt-3 pt-3 border-t border-gray-100 space-y-3">
+      {matchingSkills?.length > 0 && (
+        <div>
+          <p className="text-xs text-gray-500 mb-1.5">Matching skills</p>
+          <div className="flex flex-wrap gap-1">
+            {matchingSkills.map(s => (
+              <span key={s} className="text-xs px-2 py-0.5 bg-green-50 text-green-700 rounded-full font-medium">{s}</span>
+            ))}
+          </div>
+        </div>
+      )}
+      {scoreBreakdown && (
+        <div className="space-y-1.5">
+          <p className="text-xs text-gray-500 mb-1">Score breakdown</p>
+          <ScoreBar label="Skills"     value={scoreBreakdown.skills     ?? 0} color="bg-blue-500"/>
+          <ScoreBar label="Industry"   value={scoreBreakdown.industry   ?? 0} color="bg-green-500"/>
+          <ScoreBar label="Experience" value={scoreBreakdown.experience ?? 0} color="bg-amber-500"/>
+          <ScoreBar label="Program"    value={scoreBreakdown.program    ?? 0} color="bg-purple-500"/>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AlumniJobCard({ match, onView }) {
+  const job = match.job_listings;
+  const [showReason, setShowReason] = useState(false);
+  if (!job) return null;
+  return (
+    <div className="card">
+      <div onClick={() => onView(job, match)} className="cursor-pointer hover:opacity-90 transition-opacity">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <h3 className="font-semibold text-gray-900 text-sm">{job.title}</h3>
+              <MatchBadge score={match.match_score}/>
+            </div>
+            <div className="flex items-center gap-1 text-xs text-gray-500 mb-2">
+              <Building2 size={12}/><span className="font-medium text-gray-700">{job.company}</span>
+            </div>
+            <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+              {job.location && <span className="flex items-center gap-1"><MapPin size={11}/>{job.location}</span>}
+              {job.job_type  && <span className="flex items-center gap-1"><Clock size={11}/>{job.job_type}</span>}
+              {job.industry  && <span className="flex items-center gap-1"><Briefcase size={11}/>{job.industry}</span>}
+            </div>
+          </div>
+          <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+            <Briefcase size={18} className="text-blue-600"/>
+          </div>
+        </div>
+        {(job.salary_min || job.salary_max) && (
+          <p className="text-xs text-green-700 font-medium mt-3">
+            ₱ {job.salary_min ? Number(job.salary_min).toLocaleString() : "?"}
+            {job.salary_max ? ` – ₱ ${Number(job.salary_max).toLocaleString()}` : "+"}
+          </p>
+        )}
+        <p className="text-xs text-gray-400 mt-2">{formatDistanceToNow(new Date(job.created_at), { addSuffix: true })}</p>
+      </div>
+      <button
+        onClick={() => setShowReason(v => !v)}
+        className="mt-2 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
+      >
+        {showReason ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
+        Why recommended?
+      </button>
+      {showReason && (
+        <ReasonPanel matchingSkills={match.matching_skills} scoreBreakdown={match.score_breakdown}/>
+      )}
+    </div>
   );
 }
 
@@ -31,7 +119,6 @@ function JobCard({ job, matchScore, onClick }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <h3 className="font-semibold text-gray-900 text-sm">{job.title}</h3>
-            <MatchBadge score={matchScore}/>
           </div>
           <div className="flex items-center gap-1 text-xs text-gray-500 mb-2">
             <Building2 size={12}/><span className="font-medium text-gray-700">{job.company}</span>
@@ -54,13 +141,9 @@ function JobCard({ job, matchScore, onClick }) {
       )}
       <div className="flex items-center justify-between mt-2">
         {job.profiles ? (
-          <Link
-            to={`/profile/${job.posted_by}`}
-            onClick={e => e.stopPropagation()}
-            className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
-          >
-            <User size={11}/>
-            {job.profiles.first_name} {job.profiles.last_name}
+          <Link to={`/profile/${job.posted_by}`} onClick={e => e.stopPropagation()}
+            className="flex items-center gap-1 text-xs text-blue-600 hover:underline">
+            <User size={11}/>{job.profiles.first_name} {job.profiles.last_name}
           </Link>
         ) : <span/>}
         <p className="text-xs text-gray-400">{formatDistanceToNow(new Date(job.created_at), { addSuffix: true })}</p>
@@ -69,7 +152,7 @@ function JobCard({ job, matchScore, onClick }) {
   );
 }
 
-function JobDetailModal({ job, matchScore, onClose }) {
+function JobDetailModal({ job, matchData, onClose }) {
   if (!job) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
@@ -78,7 +161,7 @@ function JobDetailModal({ job, matchScore, onClose }) {
           <div>
             <div className="flex items-center gap-2 flex-wrap mb-1">
               <h2 className="text-lg font-bold text-gray-900">{job.title}</h2>
-              <MatchBadge score={matchScore}/>
+              {matchData && <MatchBadge score={matchData.match_score}/>}
             </div>
             <p className="text-sm text-gray-600 font-medium">{job.company}</p>
           </div>
@@ -86,11 +169,11 @@ function JobDetailModal({ job, matchScore, onClose }) {
         </div>
         <div className="p-6 space-y-5">
           <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-            {job.location       && <span className="flex items-center gap-1.5"><MapPin size={14}/>{job.location}</span>}
-            {job.job_type       && <span className="flex items-center gap-1.5"><Clock size={14}/>{job.job_type}</span>}
-            {job.industry       && <span className="flex items-center gap-1.5"><Briefcase size={14}/>{job.industry}</span>}
+            {job.location         && <span className="flex items-center gap-1.5"><MapPin size={14}/>{job.location}</span>}
+            {job.job_type         && <span className="flex items-center gap-1.5"><Clock size={14}/>{job.job_type}</span>}
+            {job.industry         && <span className="flex items-center gap-1.5"><Briefcase size={14}/>{job.industry}</span>}
             {job.experience_level && <span className="flex items-center gap-1.5"><GraduationCap size={14}/>{job.experience_level} level</span>}
-            {job.expires_at     && <span className="flex items-center gap-1.5"><Calendar size={14}/>Deadline: {new Date(job.expires_at).toLocaleDateString()}</span>}
+            {job.expires_at       && <span className="flex items-center gap-1.5"><Calendar size={14}/>Deadline: {new Date(job.expires_at).toLocaleDateString()}</span>}
           </div>
           {(job.salary_min || job.salary_max) && (
             <p className="text-sm font-semibold text-green-700">
@@ -98,6 +181,21 @@ function JobDetailModal({ job, matchScore, onClose }) {
               {job.salary_max ? ` – ₱ ${Number(job.salary_max).toLocaleString()}` : "+"}
             </p>
           )}
+
+          {/* AI match explanation — alumni only */}
+          {matchData && (
+            <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl">
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles size={14} className="text-blue-600"/>
+                <p className="text-sm font-semibold text-blue-800">Why this job was recommended</p>
+              </div>
+              <ReasonPanel
+                matchingSkills={matchData.matching_skills}
+                scoreBreakdown={matchData.score_breakdown}
+              />
+            </div>
+          )}
+
           {job.description && (
             <div>
               <h4 className="text-sm font-semibold text-gray-800 mb-2">Description</h4>
@@ -117,11 +215,8 @@ function JobDetailModal({ job, matchScore, onClose }) {
               </div>
               <div>
                 <p className="text-xs text-gray-500">Posted by</p>
-                <Link
-                  to={`/profile/${job.posted_by}`}
-                  onClick={onClose}
-                  className="text-sm font-medium text-blue-600 hover:underline"
-                >
+                <Link to={`/profile/${job.posted_by}`} onClick={onClose}
+                  className="text-sm font-medium text-blue-600 hover:underline">
                   {job.profiles.first_name} {job.profiles.last_name}
                 </Link>
                 <span className="ml-2 text-xs text-gray-400 capitalize">{job.profiles.role}</span>
@@ -156,7 +251,7 @@ function PostJobModal({ onClose, onCreated }) {
       onCreated(data);
     } catch(err) {
       const errorMsg = err.response?.data?.error || "Failed to post job.";
-      setError(typeof errorMsg === 'string' ? errorMsg : errorMsg.message || "Failed to post job.");
+      setError(typeof errorMsg === "string" ? errorMsg : errorMsg.message || "Failed to post job.");
     } finally { setSaving(false); }
   }
 
@@ -240,36 +335,50 @@ function PostJobModal({ onClose, onCreated }) {
 
 export default function JobsPage() {
   const { profile } = useAuth();
-  const [jobs, setJobs]           = useState([]);
-  const [matchMap, setMatchMap]   = useState({});
-  const [loading, setLoading]     = useState(true);
-  const [search, setSearch]       = useState("");
-  const [industry, setIndustry]   = useState("");
-  const [jobType, setJobType]     = useState("");
-  const [expLevel, setExpLevel]   = useState("");
-  const [page, setPage]           = useState(1);
+  const isAlumni = profile?.role === "alumni";
+
+  // Alumni recommendation state
+  const [recommendations, setRecommendations] = useState([]);
+  const [loadingRec, setLoadingRec]           = useState(false);
+  const [selectedMatch, setSelectedMatch]     = useState(null);
+
+  // Non-alumni browse state
+  const [jobs, setJobs]             = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [search, setSearch]         = useState("");
+  const [industry, setIndustry]     = useState("");
+  const [jobType, setJobType]       = useState("");
+  const [expLevel, setExpLevel]     = useState("");
+  const [page, setPage]             = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [selectedJob, setSelectedJob] = useState(null);
-  const [showPost, setShowPost]   = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+
+  const [showPost, setShowPost] = useState(false);
   const debounceRef = useRef(null);
 
   useEffect(() => {
-    // Load AI match scores for alumni
-    if (profile?.role === "alumni") {
-      api.get("/jobs/matched").then(({ data }) => {
-        const map = {};
-        for (const m of data) { if (m.job_listings?.id) map[m.job_listings.id] = m.match_score; }
-        setMatchMap(map);
-      }).catch(() => {});
+    if (isAlumni) {
+      loadRecommendations();
     }
-  }, [profile]);
+  }, [isAlumni]);
 
   useEffect(() => {
+    if (isAlumni) return;
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(fetchJobs, 300);
     return () => clearTimeout(debounceRef.current);
-  }, [search, industry, jobType, expLevel, page]);
+  }, [search, industry, jobType, expLevel, page, isAlumni]);
+
+  async function loadRecommendations() {
+    setLoadingRec(true);
+    try {
+      await api.get("/analytics/job-matches"); // compute & persist scores
+      const { data } = await api.get("/jobs/matched");
+      setRecommendations(data || []);
+    } catch(e) { console.error(e); }
+    finally { setLoadingRec(false); }
+  }
 
   async function fetchJobs() {
     setLoading(true);
@@ -294,84 +403,136 @@ export default function JobsPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Job Listings</h1>
-          <p className="text-sm text-gray-500 mt-1">Browse opportunities and post openings for the alumni network.</p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {isAlumni ? "Recommended Jobs" : "Job Listings"}
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {isAlumni
+              ? "AI-curated job listings ranked by your profile match."
+              : "Browse opportunities and post openings for the alumni network."}
+          </p>
         </div>
-        <button onClick={() => setShowPost(true)} className="btn-primary flex items-center gap-2 text-sm">
-          <Plus size={15}/> Post a Job
-        </button>
+        <div className="flex items-center gap-2">
+          {isAlumni && (
+            <button onClick={loadRecommendations} disabled={loadingRec}
+              className="btn-secondary flex items-center gap-2 text-sm disabled:opacity-50">
+              {loadingRec ? <Loader2 size={14} className="animate-spin"/> : <RefreshCw size={14}/>}
+              Refresh
+            </button>
+          )}
+          <button onClick={() => setShowPost(true)} className="btn-primary flex items-center gap-2 text-sm">
+            <Plus size={15}/> Post a Job
+          </button>
+        </div>
       </div>
 
-      {/* Search + Filter */}
-      <div className="flex gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-56">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-          <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
-            className="input-field pl-9" placeholder="Search jobs or companies…"/>
+      {/* Alumni: AI banner */}
+      {isAlumni && !loadingRec && recommendations.length > 0 && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700">
+          <Sparkles size={16}/>
+          Jobs are ranked by AI match score based on your skills, industry, experience, and program.
+          Click <strong className="font-semibold">"Why recommended?"</strong> on any listing to see the score breakdown.
         </div>
-        <button onClick={() => setShowFilters(v => !v)}
-          className={`btn-secondary flex items-center gap-2 text-sm ${activeFilters ? "border-blue-500 text-blue-600" : ""}`}>
-          <Filter size={14}/>Filters{activeFilters > 0 && <span className="bg-blue-600 text-white text-xs w-4 h-4 rounded-full flex items-center justify-center">{activeFilters}</span>}
-        </button>
-      </div>
+      )}
 
-      {showFilters && (
-        <div className="card flex flex-wrap gap-4">
-          <div className="flex-1 min-w-36">
-            <label className="label">Industry</label>
-            <select value={industry} onChange={e => { setIndustry(e.target.value); setPage(1); }} className="input-field bg-white text-sm">
-              <option value="">All Industries</option>
-              {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
-            </select>
+      {/* Non-alumni: Search + Filters */}
+      {!isAlumni && (
+        <>
+          <div className="flex gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-56">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+              <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
+                className="input-field pl-9" placeholder="Search jobs or companies…"/>
+            </div>
+            <button onClick={() => setShowFilters(v => !v)}
+              className={`btn-secondary flex items-center gap-2 text-sm ${activeFilters ? "border-blue-500 text-blue-600" : ""}`}>
+              <Filter size={14}/>Filters
+              {activeFilters > 0 && (
+                <span className="bg-blue-600 text-white text-xs w-4 h-4 rounded-full flex items-center justify-center">{activeFilters}</span>
+              )}
+            </button>
           </div>
-          <div className="flex-1 min-w-36">
-            <label className="label">Job Type</label>
-            <select value={jobType} onChange={e => { setJobType(e.target.value); setPage(1); }} className="input-field bg-white text-sm">
-              <option value="">All Types</option>
-              {JOB_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-          <div className="flex-1 min-w-36">
-            <label className="label">Experience Level</label>
-            <select value={expLevel} onChange={e => { setExpLevel(e.target.value); setPage(1); }} className="input-field bg-white text-sm">
-              <option value="">All Levels</option>
-              {EXP_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-            </select>
-          </div>
-          {activeFilters > 0 && (
-            <div className="flex items-end">
-              <button onClick={() => { setIndustry(""); setJobType(""); setExpLevel(""); setPage(1); }}
-                className="btn-secondary text-sm flex items-center gap-1.5"><X size={13}/>Clear</button>
+          {showFilters && (
+            <div className="card flex flex-wrap gap-4">
+              <div className="flex-1 min-w-36">
+                <label className="label">Industry</label>
+                <select value={industry} onChange={e => { setIndustry(e.target.value); setPage(1); }} className="input-field bg-white text-sm">
+                  <option value="">All Industries</option>
+                  {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
+                </select>
+              </div>
+              <div className="flex-1 min-w-36">
+                <label className="label">Job Type</label>
+                <select value={jobType} onChange={e => { setJobType(e.target.value); setPage(1); }} className="input-field bg-white text-sm">
+                  <option value="">All Types</option>
+                  {JOB_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div className="flex-1 min-w-36">
+                <label className="label">Experience Level</label>
+                <select value={expLevel} onChange={e => { setExpLevel(e.target.value); setPage(1); }} className="input-field bg-white text-sm">
+                  <option value="">All Levels</option>
+                  {EXP_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
+              </div>
+              {activeFilters > 0 && (
+                <div className="flex items-end">
+                  <button onClick={() => { setIndustry(""); setJobType(""); setExpLevel(""); setPage(1); }}
+                    className="btn-secondary text-sm flex items-center gap-1.5"><X size={13}/>Clear</button>
+                </div>
+              )}
             </div>
           )}
-        </div>
+        </>
       )}
 
-      {/* AI Banner */}
-      {profile?.role === "alumni" && Object.keys(matchMap).length > 0 && (
-        <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700">
-          <Sparkles size={16}/> AI match scores are shown on each listing based on your profile.
-        </div>
+      {/* Alumni: Recommendations grid */}
+      {isAlumni && (
+        loadingRec ? (
+          <div className="card flex flex-col items-center justify-center py-20 text-gray-400">
+            <Loader2 size={28} className="animate-spin text-blue-600 mb-3"/>
+            <p className="text-sm">AI is analyzing your profile and ranking jobs…</p>
+          </div>
+        ) : recommendations.length === 0 ? (
+          <div className="card text-center py-16 text-gray-400">
+            <BookmarkPlus size={36} className="mx-auto mb-3 opacity-40"/>
+            <p className="text-sm">No recommendations yet. Make sure your profile is complete and try refreshing.</p>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {recommendations.map(match => (
+              <AlumniJobCard
+                key={match.job_id}
+                match={match}
+                onView={(job, m) => setSelectedMatch({ job, matchData: m })}
+              />
+            ))}
+          </div>
+        )
       )}
 
-      {/* Jobs Grid */}
-      {loading ? (
-        <div className="flex items-center justify-center h-48"><Loader2 size={24} className="animate-spin text-blue-600"/></div>
-      ) : jobs.length === 0 ? (
-        <div className="card text-center py-16 text-gray-400">
-          <BookmarkPlus size={36} className="mx-auto mb-3 opacity-40"/>
-          <p className="text-sm">No job listings found.</p>
-        </div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {jobs.map(job => (
-            <JobCard key={job.id} job={job} matchScore={matchMap[job.id]} onClick={setSelectedJob}/>
-          ))}
-        </div>
+      {/* Non-alumni: Jobs grid */}
+      {!isAlumni && (
+        loading ? (
+          <div className="flex items-center justify-center h-48">
+            <Loader2 size={24} className="animate-spin text-blue-600"/>
+          </div>
+        ) : jobs.length === 0 ? (
+          <div className="card text-center py-16 text-gray-400">
+            <BookmarkPlus size={36} className="mx-auto mb-3 opacity-40"/>
+            <p className="text-sm">No job listings found.</p>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {jobs.map(job => (
+              <JobCard key={job.id} job={job} onClick={setSelectedJob}/>
+            ))}
+          </div>
+        )
       )}
 
-      {/* Pagination */}
-      {totalPages > 1 && (
+      {/* Non-alumni: Pagination */}
+      {!isAlumni && totalPages > 1 && (
         <div className="flex items-center justify-center gap-3 pt-2">
           <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={page === 1} className="btn-secondary p-2 disabled:opacity-40">
             <ChevronLeft size={16}/>
@@ -383,11 +544,28 @@ export default function JobsPage() {
         </div>
       )}
 
-      {selectedJob && (
-        <JobDetailModal job={selectedJob} matchScore={matchMap[selectedJob.id]} onClose={() => setSelectedJob(null)}/>
+      {/* Alumni: Job detail modal with match explanation */}
+      {selectedMatch && (
+        <JobDetailModal
+          job={selectedMatch.job}
+          matchData={selectedMatch.matchData}
+          onClose={() => setSelectedMatch(null)}
+        />
       )}
+
+      {/* Non-alumni: Job detail modal */}
+      {selectedJob && (
+        <JobDetailModal job={selectedJob} onClose={() => setSelectedJob(null)}/>
+      )}
+
       {showPost && (
-        <PostJobModal onClose={() => setShowPost(false)} onCreated={newJob => { setJobs(prev => [newJob, ...prev]); setShowPost(false); }}/>
+        <PostJobModal
+          onClose={() => setShowPost(false)}
+          onCreated={newJob => {
+            if (!isAlumni) setJobs(prev => [newJob, ...prev]);
+            setShowPost(false);
+          }}
+        />
       )}
     </div>
   );

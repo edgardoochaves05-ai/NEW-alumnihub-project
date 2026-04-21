@@ -108,11 +108,11 @@ function AppRoutes() {
           }
         />
 
-        {/* Career Prediction — Faculty and Admin only */}
+        {/* Career Prediction — Alumni only */}
         <Route
           path="career-prediction"
           element={
-            <ProtectedRoute allowedRoles={["faculty", "admin"]}>
+            <ProtectedRoute allowedRoles={["alumni"]}>
               <CareerPredictionPage />
             </ProtectedRoute>
           }

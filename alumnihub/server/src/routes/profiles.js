@@ -36,6 +36,28 @@ router.put("/me", authenticate, async (req, res, next) => {
       if (req.body[field] !== undefined) updates[field] = req.body[field];
     }
 
+    // Server-side required field validation
+    const { data: currentProfile } = await supabase
+      .from("profiles").select("role").eq("id", req.user.id).single();
+
+    const role = currentProfile?.role || req.profile?.role;
+    const REQUIRED_PERSONAL = ["first_name", "last_name", "phone", "date_of_birth", "gender", "city", "address"];
+    const REQUIRED_ACADEMIC = ["student_number", "program", "department", "graduation_year", "batch_year"];
+    const requiredFields = [
+      ...REQUIRED_PERSONAL,
+      ...(["alumni", "student"].includes(role) ? REQUIRED_ACADEMIC : []),
+    ];
+
+    const missing = requiredFields.filter(f => {
+      const val = updates[f];
+      return val === undefined || val === null || val.toString().trim() === "";
+    });
+
+    if (missing.length > 0) {
+      const readable = missing.map(f => f.replace(/_/g, " ")).join(", ");
+      return res.status(400).json({ error: `Missing required fields: ${readable}` });
+    }
+
     const { data, error } = await supabase
       .from("profiles")
       .upsert(
