@@ -7,8 +7,16 @@ import {
 } from "recharts";
 import { Sparkles, TrendingUp, Loader2, RefreshCw, ChevronRight, Target, AlertCircle } from "lucide-react";
 
+function normalizeScore(score) {
+  if (!score) return 0;
+  // If score is already a percentage (> 1), clamp to 100
+  // If score is a decimal (0-1 range), multiply by 100
+  const raw = score > 1 ? score : score * 100;
+  return Math.min(100, Math.round(raw));
+}
+
 function ConfidenceBar({ value }) {
-  const pct = Math.round((value || 0) * 100);
+  const pct = normalizeScore(value || 0);
   const color = pct >= 70 ? "bg-green-500" : pct >= 40 ? "bg-amber-400" : "bg-gray-300";
   return (
     <div className="flex items-center gap-3">

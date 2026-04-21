@@ -16,9 +16,17 @@ const INDUSTRIES = ["Technology","Finance","Healthcare","Education","Engineering
 const JOB_TYPES  = ["full-time","part-time","contract","internship","remote"];
 const EXP_LEVELS = ["entry","mid","senior","executive"];
 
+function normalizeScore(score) {
+  if (!score) return 0;
+  // If score is already a percentage (> 1), clamp to 100
+  // If score is a decimal (0-1 range), multiply by 100
+  const raw = score > 1 ? score : score * 100;
+  return Math.min(100, Math.round(raw));
+}
+
 function MatchBadge({ score }) {
   if (!score) return null;
-  const pct = Math.round(score * 100);
+  const pct = normalizeScore(score);
   const color = pct >= 75 ? "bg-green-100 text-green-700" : pct >= 50 ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500";
   return (
     <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${color}`}>
@@ -29,7 +37,7 @@ function MatchBadge({ score }) {
 
 function MatchBar({ score }) {
   if (!score) return null;
-  const pct = Math.round(score * 100);
+  const pct = normalizeScore(score);
   const barColor = pct >= 75 ? "bg-green-500" : pct >= 50 ? "bg-blue-500" : "bg-gray-300";
   const textColor = pct >= 75 ? "text-green-700" : pct >= 50 ? "text-blue-700" : "text-gray-500";
   return (
@@ -54,7 +62,7 @@ function Top10MatchChart({ jobs, matchMap, onJobClick }) {
     .map(j => ({
       name: j.title.length > 24 ? j.title.slice(0, 24) + "…" : j.title,
       company: j.company,
-      score: Math.round((matchMap[j.id] || 0) * 100),
+      score: normalizeScore(matchMap[j.id] || 0),
       job: j,
     }));
 
