@@ -116,41 +116,27 @@ function Top10MatchChart({ jobs, matchMap, onJobClick }) {
 }
 
 // ── Job Card ───────────────────────────────────────────────────
-function JobCard({ job, matchScore, onClick }) {
+function JobCard({ job, onClick }) {
   return (
-    <div onClick={() => onClick(job)} className="card cursor-pointer hover:shadow-md transition-shadow flex flex-col gap-2">
+    <div
+      onClick={() => onClick(job)}
+      className="card cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all flex flex-col gap-1.5"
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-gray-900 text-sm leading-snug mb-1">{job.title}</h3>
-          <div className="flex items-center gap-1 text-xs text-gray-500 mb-2">
-            <Building2 size={12}/><span className="font-medium text-gray-700">{job.company}</span>
+          <div className="flex items-center gap-1 text-xs text-gray-600">
+            <Building2 size={12}/><span className="font-medium">{job.company}</span>
           </div>
-          <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-            {job.location && <span className="flex items-center gap-1"><MapPin size={11}/>{job.location}</span>}
-            {job.job_type  && <span className="flex items-center gap-1"><Clock size={11}/>{job.job_type}</span>}
-            {job.industry  && <span className="flex items-center gap-1"><Briefcase size={11}/>{job.industry}</span>}
-          </div>
-          {matchScore && <MatchBar score={matchScore}/>}
+          {job.location && (
+            <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
+              <MapPin size={11}/>{job.location}
+            </div>
+          )}
         </div>
         <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
           <Briefcase size={18} className="text-blue-600"/>
         </div>
-      </div>
-
-      {(job.salary_min || job.salary_max) && (
-        <p className="text-xs text-green-700 font-medium">
-          ₱ {job.salary_min ? Number(job.salary_min).toLocaleString() : "?"}
-          {job.salary_max ? ` – ₱ ${Number(job.salary_max).toLocaleString()}` : "+"}
-        </p>
-      )}
-      <div className="flex items-center justify-between mt-auto pt-1 border-t border-gray-50">
-        {job.profiles ? (
-          <Link to={`/profile/${job.posted_by}`} onClick={e => e.stopPropagation()}
-            className="flex items-center gap-1 text-xs text-blue-600 hover:underline">
-            <User size={11}/>{job.profiles.first_name} {job.profiles.last_name}
-          </Link>
-        ) : <span/>}
-        <p className="text-xs text-gray-400">{formatDistanceToNow(new Date(job.created_at), { addSuffix: true })}</p>
       </div>
     </div>
   );
@@ -371,7 +357,7 @@ export default function JobsPage() {
   const [selectedJob, setSelectedJob] = useState(null);
   const [showPost, setShowPost]       = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  const [viewMode, setViewMode]       = useState("all"); // "all" | "others"
+  const [showOthers, setShowOthers]   = useState(false);
   const debounceRef = useRef(null);
 
   const top10Ids = useMemo(() => {
@@ -486,39 +472,49 @@ export default function JobsPage() {
         </div>
       )}
 
-      {/* AI Banner + View Toggle */}
+      {/* AI Banner */}
       {hasMatches && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700">
-            <Sparkles size={16}/> AI match scores shown on each listing are based on your profile.
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setViewMode("all")}
-              className={`text-sm px-4 py-1.5 rounded-lg font-medium transition-colors ${viewMode === "all" ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
-            >All Jobs</button>
-            <button
-              onClick={() => setViewMode("others")}
-              className={`text-sm px-4 py-1.5 rounded-lg font-medium transition-colors ${viewMode === "others" ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
-            >Other Listings</button>
-          </div>
+        <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700">
+          <Sparkles size={16}/> AI match scores shown on each listing are based on your profile.
+        </div>
+      )}
+
+      {/* Other Listings Section — jobs outside the top 10 */}
+      {hasMatches && (
+        <div>
+          <button
+            onClick={() => setShowOthers(v => !v)}
+            className={`text-sm px-4 py-1.5 rounded-lg font-medium transition-colors border ${
+              showOthers
+                ? "bg-blue-600 text-white border-blue-600"
+                : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            Other Listings
+          </button>
         </div>
       )}
 
       {/* Jobs Grid */}
       {(() => {
-        const displayedJobs = viewMode === "others" ? jobs.filter(j => !top10Ids.has(j.id)) : jobs;
+        // For alumni with matches: only show when "Other Listings" is toggled on
+        // For others (non-alumni / no match data): always show all jobs
+        const shouldShow = !hasMatches || showOthers;
+        if (!shouldShow) return null;
+
+        const displayedJobs = hasMatches ? jobs.filter(j => !top10Ids.has(j.id)) : jobs;
+
         return loading ? (
           <div className="flex items-center justify-center h-48"><Loader2 size={24} className="animate-spin text-blue-600"/></div>
         ) : displayedJobs.length === 0 ? (
           <div className="card text-center py-16 text-gray-400">
             <BookmarkPlus size={36} className="mx-auto mb-3 opacity-40"/>
-            <p className="text-sm">{viewMode === "others" ? "No other listings outside your top 10 matches." : "No job listings found."}</p>
+            <p className="text-sm">No other listings outside your top 10 matches.</p>
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {displayedJobs.map(job => (
-              <JobCard key={job.id} job={job} matchScore={matchMap[job.id]} onClick={setSelectedJob}/>
+              <JobCard key={job.id} job={job} onClick={setSelectedJob}/>
             ))}
           </div>
         );
