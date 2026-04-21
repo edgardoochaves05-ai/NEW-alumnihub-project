@@ -31,21 +31,28 @@ export async function generateCurriculumImpact(program, options = {}) {
   if (!alumni || alumni.length < 2) {
     return {
       program,
+      summary: `Not enough alumni data for ${program}. At least 2 alumni profiles are needed.`,
+      totalGraduates: alumni?.length || 0,
       message: "Insufficient alumni data for this program. At least 2 alumni profiles are needed.",
-      total_alumni: alumni?.length || 0,
     };
   }
 
   // 2. Compute metrics
   const totalAlumni = alumni.length;
   const employedAlumni = alumni.filter((a) => a.current_job_title);
-  const employmentRate = Math.round((employedAlumni.length / totalAlumni) * 100 * 100) / 100;
+  // employmentRate as integer 0-100
+  const employmentRate = Math.round((employedAlumni.length / totalAlumni) * 100);
 
   const avgTimeToEmployment = computeAvgTimeToEmployment(alumni);
-  const topIndustries = computeTopItems(employedAlumni, "industry");
-  const topJobTitles = computeTopItems(employedAlumni, "current_job_title");
-  const topCompanies = computeTopItems(employedAlumni, "current_company");
+
+  // Normalize top items to use the key names the frontend charts expect
+  const topIndustries  = computeTopItems(employedAlumni, "industry").map(i => ({ industry: i.name, count: i.count, percentage: i.percentage }));
+  const topJobTitles   = computeTopItems(employedAlumni, "current_job_title").map(i => ({ title: i.name, count: i.count, percentage: i.percentage }));
+  const topCompanies   = computeTopItems(employedAlumni, "current_company").map(i => ({ company: i.name, count: i.count, percentage: i.percentage }));
+
+  // avgProgressionScore as integer 0-100
   const avgProgressionScore = computeCareerProgressionScore(alumni);
+
   const skillsDemand = computeSkillsDemandAlignment(alumni);
 
   const graduationRange = yearStart && yearEnd
@@ -63,23 +70,40 @@ export async function generateCurriculumImpact(program, options = {}) {
     avgProgressionScore,
   });
 
-  // 4. Store results
+  // 4. Return with frontend-compatible field names
   const report = {
+    // Fields the frontend reads directly
     program,
-    department: alumni[0]?.department || null,
-    graduation_year_range: graduationRange,
-    total_alumni_analyzed: totalAlumni,
-    employment_rate: employmentRate,
+    totalGraduates:       totalAlumni,
+    employmentRate,                          // integer 0-100
+    avgProgressionScore,                     // integer 0-100
+    topIndustries,                           // [{industry, count, percentage}]
+    topJobTitles,                            // [{title,    count, percentage}]
+    topCompanies,                            // [{company,  count, percentage}]
+    topSkills: skillsDemand,                 // [{skill, count}]
+    summary:   insights,                     // shown in blue AI banner
+    insights,                                // shown in AI insights card
+    // Extra metadata
+    department:                alumni[0]?.department || null,
+    graduation_year_range:      graduationRange,
     avg_time_to_employment_months: avgTimeToEmployment,
-    top_industries: topIndustries,
-    top_job_titles: topJobTitles,
-    top_companies: topCompanies,
-    avg_career_progression_score: avgProgressionScore,
-    skills_demand_alignment: skillsDemand,
-    insights,
   };
 
-  await supabase.from("curriculum_impact").insert(report);
+  // Persist to curriculum_impact table (best-effort)
+  await supabase.from("curriculum_impact").insert({
+    program,
+    department:                    report.department,
+    graduation_year_range:         report.graduation_year_range,
+    total_alumni_analyzed:         totalAlumni,
+    employment_rate:               employmentRate,
+    avg_time_to_employment_months: avgTimeToEmployment,
+    top_industries:                topIndustries,
+    top_job_titles:                topJobTitles,
+    top_companies:                 topCompanies,
+    avg_career_progression_score:  avgProgressionScore,
+    skills_demand_alignment:       skillsDemand,
+    insights,
+  }).then(() => {}).catch(() => {}); // non-blocking
 
   return report;
 }

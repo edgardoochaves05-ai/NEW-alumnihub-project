@@ -125,13 +125,13 @@ export default function CurriculumImpactPage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <StatBadge label="Graduates Analyzed" value={report.totalGraduates?.toLocaleString()} color="bg-blue-50 text-blue-700"/>
             <StatBadge label="Employment Rate"
-              value={report.employmentRate != null ? `${Math.round(report.employmentRate * 100)}%` : null}
+              value={report.employmentRate != null ? `${report.employmentRate}%` : null}
               color="bg-green-50 text-green-700"/>
             <StatBadge label="Avg. Progression Score"
-              value={report.avgProgressionScore != null ? `${Math.round(report.avgProgressionScore * 100)}%` : null}
+              value={report.avgProgressionScore != null ? `${report.avgProgressionScore}%` : null}
               color="bg-amber-50 text-amber-700"/>
             <StatBadge label="Industries Represented"
-              value={report.industries?.length ?? report.topIndustries?.length}
+              value={report.topIndustries?.length}
               color="bg-purple-50 text-purple-700"/>
           </div>
 
@@ -184,15 +184,14 @@ export default function CurriculumImpactPage() {
             </div>
           )}
 
-          {/* Top Skills */}
-          {(report.topSkills || report.skills)?.length > 0 && (
+          {report.topSkills?.length > 0 && (
             <div className="card">
               <h2 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 <Users size={15} className="text-blue-600"/>Most Common Skills
               </h2>
               <div className="space-y-3">
-                {(report.topSkills || report.skills).slice(0, 10).map((s, i) => {
-                  const max = (report.topSkills || report.skills)[0]?.count || 1;
+                {report.topSkills.slice(0, 10).map((s, i) => {
+                  const max = report.topSkills[0]?.count || 1;
                   const pct = Math.round((s.count / max) * 100);
                   return (
                     <div key={i} className="flex items-center gap-3">
