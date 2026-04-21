@@ -57,7 +57,8 @@ export default function SettingsPage() {
       if (refreshProfile) await refreshProfile();
       setPrivacyMsg({ text: "Privacy setting updated.", type: "success" });
     } catch(err) {
-      setPrivacyMsg({ text: err.response?.data?.error || "Failed to update.", type: "error" });
+      const errorMsg = err.response?.data?.error || "Failed to update.";
+      setPrivacyMsg({ text: typeof errorMsg === 'string' ? errorMsg : errorMsg.message || "Failed to update.", type: "error" });
     } finally { setSavingPrivacy(false); }
   }
 

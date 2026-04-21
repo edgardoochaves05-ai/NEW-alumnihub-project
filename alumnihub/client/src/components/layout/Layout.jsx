@@ -6,17 +6,16 @@ import {
 } from "lucide-react";
 
 const navItems = [
-  { to: "/dashboard",         icon: LayoutDashboard, label: "Dashboard",         roles: ["alumni", "student", "faculty", "admin"] },
-  { to: "/profile",           icon: User,            label: "My Profile",         roles: ["alumni", "student", "faculty"] },
-  { to: "/alumni",            icon: Users,           label: "Alumni Directory",   roles: ["faculty", "admin"] },
-  { to: "/students",          icon: BookOpen,        label: "Student Directory",  roles: ["faculty", "admin"] },
-  { to: "/faculty-directory", icon: Users,           label: "Faculty Directory",  roles: ["admin"] },
-  { to: "/jobs",              icon: Briefcase,       label: "Jobs",               roles: ["alumni", "student", "faculty", "admin"] },
-  { to: "/messages",          icon: Mail,            label: "Inbox",              roles: ["alumni", "student", "faculty"] },
-  { to: "/career-prediction", icon: TrendingUp,      label: "Career Prediction",  roles: ["faculty", "admin"] },
-  { to: "/reports",           icon: BarChart3,       label: "Reports",            roles: ["faculty", "admin"] },
-  { to: "/curriculum-impact", icon: GraduationCap,   label: "Curriculum Impact",  roles: ["faculty", "admin"] },
-  { to: "/settings",          icon: Settings,        label: "Settings",           roles: ["alumni", "student", "faculty", "admin"] },
+  { to: "/dashboard",         icon: LayoutDashboard, label: "Dashboard",         roles: ["alumni", "student", "admin"] },
+  { to: "/profile",           icon: User,            label: "My Profile",         roles: ["alumni", "student"] },
+  { to: "/alumni",            icon: Users,           label: "Alumni Directory",   roles: ["admin"] },
+  { to: "/students",          icon: BookOpen,        label: "Student Directory",  roles: ["admin"] },
+  { to: "/jobs",              icon: Briefcase,       label: "Jobs",               roles: ["alumni", "student", "admin"] },
+  { to: "/messages",          icon: Mail,            label: "Inbox",              roles: ["alumni", "student", "admin"] },
+  { to: "/career-prediction", icon: TrendingUp,      label: "Career Prediction",  roles: ["alumni"] },
+  { to: "/reports",           icon: BarChart3,       label: "Reports",            roles: ["admin"] },
+  { to: "/curriculum-impact", icon: GraduationCap,   label: "Curriculum Impact",  roles: ["admin"] },
+  { to: "/settings",          icon: Settings,        label: "Settings",           roles: ["alumni", "student", "admin"] },
 ];
 
 export default function Layout() {

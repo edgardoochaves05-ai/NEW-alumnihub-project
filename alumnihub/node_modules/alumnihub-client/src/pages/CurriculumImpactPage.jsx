@@ -49,7 +49,8 @@ export default function CurriculumImpactPage() {
       const { data } = await api.get(`/analytics/curriculum-impact?${params}`);
       setReport(data);
     } catch(err) {
-      setError(err.response?.data?.error || "Failed to generate report.");
+      const errorMsg = err.response?.data?.error || "Failed to generate report.";
+      setError(typeof errorMsg === 'string' ? errorMsg : errorMsg.message || "Failed to generate report.");
     } finally { setLoading(false); }
   }
 

@@ -488,7 +488,8 @@ export default function ProfilePage() {
       refreshProfile();
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (e) {
-      setSaveError(e.response?.data?.error || e.message || "Failed to save changes.");
+      const errorMsg = e.response?.data?.error || e.message || "Failed to save changes.";
+      setSaveError(typeof errorMsg === 'string' ? errorMsg : errorMsg.message || "Failed to save changes.");
       setUploadingAvatar(false);
     } finally {
       setSaving(false);
@@ -530,7 +531,8 @@ export default function ProfilePage() {
         setMsgSent(false);
       }, 2000);
     } catch (err) {
-      setMsgError(err.response?.data?.error || "Failed to send.");
+      const errorMsg = err.response?.data?.error || "Failed to send.";
+      setMsgError(typeof errorMsg === 'string' ? errorMsg : errorMsg.message || "Failed to send.");
     } finally {
       setSendingMsg(false);
     }
@@ -610,7 +612,8 @@ export default function ProfilePage() {
       };
       reader.readAsDataURL(file);
     } catch (err) {
-      setUploadMsg(err.response?.data?.error || "Upload failed.");
+      const errorMsg = err.response?.data?.error || "Upload failed.";
+      setUploadMsg(typeof errorMsg === 'string' ? errorMsg : errorMsg.message || "Upload failed.");
       setUploading(false);
     }
   }

@@ -71,10 +71,10 @@ export default function ReportsPage() {
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Total Alumni" value={stats?.totalAlumni?.toLocaleString()} icon={GraduationCap} color="text-blue-600"/>
-        <StatCard label="Employed" value={stats?.employedAlumni?.toLocaleString()} icon={Briefcase} color="text-green-600"/>
+        <StatCard label="Employed" value={stats?.totalEmployed?.toLocaleString()} icon={Briefcase} color="text-green-600"/>
         <StatCard
           label="Employment Rate"
-          value={stats?.totalAlumni ? `${Math.round((stats.employedAlumni / stats.totalAlumni) * 100)}%` : "—"}
+          value={stats?.overallEmploymentRate != null ? `${stats.overallEmploymentRate}%` : "—"}
           icon={TrendingUp}
           color="text-amber-600"
         />
