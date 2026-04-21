@@ -424,52 +424,56 @@ export default function JobsPage() {
         <Top10MatchChart jobs={jobs} matchMap={matchMap} onJobClick={setSelectedJob}/>
       )}
 
-      {/* Search + Filter */}
-      <div className="flex gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-56">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-          <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
-            className="input-field pl-9" placeholder="Search jobs or companies…"/>
-        </div>
-        <button onClick={() => setShowFilters(v => !v)}
-          className={`btn-secondary flex items-center gap-2 text-sm ${activeFilters ? "border-blue-500 text-blue-600" : ""}`}>
-          <Filter size={14}/>Filters
-          {activeFilters > 0 && (
-            <span className="bg-blue-600 text-white text-xs w-4 h-4 rounded-full flex items-center justify-center">{activeFilters}</span>
-          )}
-        </button>
-      </div>
+      {/* Search + Filter — only visible when Other Listings is open */}
+      {(!hasMatches || showOthers) && (
+        <>
+          <div className="flex gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-56">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+              <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
+                className="input-field pl-9" placeholder="Search jobs or companies…"/>
+            </div>
+            <button onClick={() => setShowFilters(v => !v)}
+              className={`btn-secondary flex items-center gap-2 text-sm ${activeFilters ? "border-blue-500 text-blue-600" : ""}`}>
+              <Filter size={14}/>Filters
+              {activeFilters > 0 && (
+                <span className="bg-blue-600 text-white text-xs w-4 h-4 rounded-full flex items-center justify-center">{activeFilters}</span>
+              )}
+            </button>
+          </div>
 
-      {showFilters && (
-        <div className="card flex flex-wrap gap-4">
-          <div className="flex-1 min-w-36">
-            <label className="label">Industry</label>
-            <select value={industry} onChange={e => { setIndustry(e.target.value); setPage(1); }} className="input-field bg-white text-sm">
-              <option value="">All Industries</option>
-              {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
-            </select>
-          </div>
-          <div className="flex-1 min-w-36">
-            <label className="label">Job Type</label>
-            <select value={jobType} onChange={e => { setJobType(e.target.value); setPage(1); }} className="input-field bg-white text-sm">
-              <option value="">All Types</option>
-              {JOB_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-          <div className="flex-1 min-w-36">
-            <label className="label">Experience Level</label>
-            <select value={expLevel} onChange={e => { setExpLevel(e.target.value); setPage(1); }} className="input-field bg-white text-sm">
-              <option value="">All Levels</option>
-              {EXP_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-            </select>
-          </div>
-          {activeFilters > 0 && (
-            <div className="flex items-end">
-              <button onClick={() => { setIndustry(""); setJobType(""); setExpLevel(""); setPage(1); }}
-                className="btn-secondary text-sm flex items-center gap-1.5"><X size={13}/>Clear</button>
+          {showFilters && (
+            <div className="card flex flex-wrap gap-4">
+              <div className="flex-1 min-w-36">
+                <label className="label">Industry</label>
+                <select value={industry} onChange={e => { setIndustry(e.target.value); setPage(1); }} className="input-field bg-white text-sm">
+                  <option value="">All Industries</option>
+                  {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
+                </select>
+              </div>
+              <div className="flex-1 min-w-36">
+                <label className="label">Job Type</label>
+                <select value={jobType} onChange={e => { setJobType(e.target.value); setPage(1); }} className="input-field bg-white text-sm">
+                  <option value="">All Types</option>
+                  {JOB_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div className="flex-1 min-w-36">
+                <label className="label">Experience Level</label>
+                <select value={expLevel} onChange={e => { setExpLevel(e.target.value); setPage(1); }} className="input-field bg-white text-sm">
+                  <option value="">All Levels</option>
+                  {EXP_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
+              </div>
+              {activeFilters > 0 && (
+                <div className="flex items-end">
+                  <button onClick={() => { setIndustry(""); setJobType(""); setExpLevel(""); setPage(1); }}
+                    className="btn-secondary text-sm flex items-center gap-1.5"><X size={13}/>Clear</button>
+                </div>
+              )}
             </div>
           )}
-        </div>
+        </>
       )}
 
       {/* AI Banner */}
@@ -520,8 +524,8 @@ export default function JobsPage() {
         );
       })()}
 
-      {/* Pagination */}
-      {totalPages > 1 && (
+      {/* Pagination — only visible when Other Listings is open */}
+      {(!hasMatches || showOthers) && totalPages > 1 && (
         <div className="flex items-center justify-center gap-3 pt-2">
           <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={page === 1} className="btn-secondary p-2 disabled:opacity-40">
             <ChevronLeft size={16}/>
