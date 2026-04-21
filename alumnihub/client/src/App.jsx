@@ -44,32 +44,32 @@ function AppRoutes() {
         <Route index element={<Navigate to="/dashboard" />} />
         <Route path="dashboard" element={<DashboardPage />} />
 
-        {/* Profile — Alumni, Student, Faculty */}
+        {/* Profile — Alumni and Student */}
         <Route
           path="profile"
           element={
-            <ProtectedRoute allowedRoles={["alumni", "student", "faculty"]}>
+            <ProtectedRoute allowedRoles={["alumni", "student"]}>
               <ProfilePage />
             </ProtectedRoute>
           }
         />
         <Route path="profile/:id" element={<ProfilePage />} />
 
-        {/* Alumni Directory — Faculty and Admin only */}
+        {/* Alumni Directory — Admin only */}
         <Route
           path="alumni"
           element={
-            <ProtectedRoute allowedRoles={["faculty", "admin"]}>
+            <ProtectedRoute allowedRoles={["admin"]}>
               <AlumniListPage />
             </ProtectedRoute>
           }
         />
 
-        {/* Student Directory — Faculty and Admin only */}
+        {/* Student Directory — Admin only */}
         <Route
           path="students"
           element={
-            <ProtectedRoute allowedRoles={["faculty", "admin"]}>
+            <ProtectedRoute allowedRoles={["admin"]}>
               <StudentDirectoryPage />
             </ProtectedRoute>
           }
@@ -88,11 +88,11 @@ function AppRoutes() {
         {/* Jobs — all roles */}
         <Route path="jobs" element={<JobsPage />} />
 
-        {/* Inbox — Alumni, Student, and Faculty */}
+        {/* Inbox — Alumni, Student, and Admin */}
         <Route
           path="messages"
           element={
-            <ProtectedRoute allowedRoles={["alumni", "student", "faculty"]}>
+            <ProtectedRoute allowedRoles={["alumni", "student", "admin"]}>
               <MessagesPage />
             </ProtectedRoute>
           }
@@ -102,7 +102,7 @@ function AppRoutes() {
         <Route
           path="settings"
           element={
-            <ProtectedRoute allowedRoles={["alumni", "student", "faculty", "admin"]}>
+            <ProtectedRoute allowedRoles={["alumni", "student", "admin"]}>
               <SettingsPage />
             </ProtectedRoute>
           }
@@ -118,21 +118,21 @@ function AppRoutes() {
           }
         />
 
-        {/* Reports — Faculty and Admin */}
+        {/* Reports — Admin only */}
         <Route
           path="reports"
           element={
-            <ProtectedRoute allowedRoles={["faculty", "admin"]}>
+            <ProtectedRoute allowedRoles={["admin"]}>
               <ReportsPage />
             </ProtectedRoute>
           }
         />
 
-        {/* Curriculum Impact — Faculty and Admin */}
+        {/* Curriculum Impact — Admin only */}
         <Route
           path="curriculum-impact"
           element={
-            <ProtectedRoute allowedRoles={["faculty", "admin"]}>
+            <ProtectedRoute allowedRoles={["admin"]}>
               <CurriculumImpactPage />
             </ProtectedRoute>
           }

@@ -75,7 +75,7 @@ router.put("/me", authenticate, async (req, res, next) => {
 });
 
 // ── Get student list (with filters) ──
-router.get("/students", authenticate, authorize("faculty", "admin"), async (req, res, next) => {
+router.get("/students", authenticate, authorize("admin"), async (req, res, next) => {
   try {
     const { program, search, page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
@@ -228,7 +228,7 @@ router.post("/avatar", authenticate, async (req, res, next) => {
 });
 
 // ── Verify alumni (Faculty/Admin) ──
-router.patch("/:id/verify", authenticate, authorize("faculty", "admin"), async (req, res, next) => {
+router.patch("/:id/verify", authenticate, authorize("admin"), async (req, res, next) => {
   try {
     const { data, error } = await supabase
       .from("profiles")
