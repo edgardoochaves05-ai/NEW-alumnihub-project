@@ -33,7 +33,7 @@ $$ LANGUAGE sql SECURITY DEFINER STABLE;
 CREATE POLICY "profiles_select" ON profiles
     FOR SELECT USING (
         id = auth.uid()                              -- Own profile always visible
-        OR get_user_role() IN ('faculty', 'admin')   -- Faculty/Admin see everyone
+        OR get_user_role() IN ('career_advisor', 'admin')   -- Faculty/Admin see everyone
         OR (is_private = false AND is_active = true)  -- Public profiles visible to all
     );
 
@@ -43,7 +43,7 @@ CREATE POLICY "profiles_update_own" ON profiles
 
 -- Faculty/Admin can update any profile
 CREATE POLICY "profiles_update_admin" ON profiles
-    FOR UPDATE USING (get_user_role() IN ('faculty', 'admin'));
+    FOR UPDATE USING (get_user_role() IN ('career_advisor', 'admin'));
 
 -- ══════════════════════════════
 -- CAREER MILESTONES
@@ -75,10 +75,10 @@ CREATE POLICY "jobs_insert" ON job_listings
 
 -- Poster or admin can update/delete
 CREATE POLICY "jobs_update" ON job_listings
-    FOR UPDATE USING (posted_by = auth.uid() OR get_user_role() IN ('faculty', 'admin'));
+    FOR UPDATE USING (posted_by = auth.uid() OR get_user_role() IN ('career_advisor', 'admin'));
 
 CREATE POLICY "jobs_delete" ON job_listings
-    FOR DELETE USING (posted_by = auth.uid() OR get_user_role() IN ('faculty', 'admin'));
+    FOR DELETE USING (posted_by = auth.uid() OR get_user_role() IN ('career_advisor', 'admin'));
 
 -- ══════════════════════════════
 -- JOB MATCH SCORES (AI)
@@ -94,7 +94,7 @@ CREATE POLICY "match_select_own" ON job_match_scores
 CREATE POLICY "predictions_select" ON career_predictions
     FOR SELECT USING (
         profile_id = auth.uid()
-        OR get_user_role() IN ('faculty', 'admin')
+        OR get_user_role() IN ('career_advisor', 'admin')
     );
 
 -- ══════════════════════════════
@@ -102,7 +102,7 @@ CREATE POLICY "predictions_select" ON career_predictions
 -- ══════════════════════════════
 -- Faculty and admin only
 CREATE POLICY "curriculum_select" ON curriculum_impact
-    FOR SELECT USING (get_user_role() IN ('faculty', 'admin'));
+    FOR SELECT USING (get_user_role() IN ('career_advisor', 'admin'));
 
 -- ══════════════════════════════
 -- MESSAGES
@@ -145,14 +145,14 @@ CREATE POLICY "feedback_update_admin" ON feedback
 -- ══════════════════════════════
 -- Everyone can see published announcements
 CREATE POLICY "announcements_select" ON announcements
-    FOR SELECT USING (is_published = true OR get_user_role() IN ('faculty', 'admin'));
+    FOR SELECT USING (is_published = true OR get_user_role() IN ('career_advisor', 'admin'));
 
 -- Faculty/Admin can create and manage
 CREATE POLICY "announcements_insert" ON announcements
-    FOR INSERT WITH CHECK (get_user_role() IN ('faculty', 'admin'));
+    FOR INSERT WITH CHECK (get_user_role() IN ('career_advisor', 'admin'));
 
 CREATE POLICY "announcements_update" ON announcements
-    FOR UPDATE USING (get_user_role() IN ('faculty', 'admin'));
+    FOR UPDATE USING (get_user_role() IN ('career_advisor', 'admin'));
 
 CREATE POLICY "announcements_delete" ON announcements
     FOR DELETE USING (get_user_role() = 'admin');
@@ -181,7 +181,7 @@ CREATE POLICY "msg_requests_delete" ON message_requests
 -- ══════════════════════════════
 -- Users can only access their own CV data
 CREATE POLICY "cv_parsed_select" ON cv_parsed_data
-    FOR SELECT USING (profile_id = auth.uid() OR get_user_role() IN ('faculty', 'admin'));
+    FOR SELECT USING (profile_id = auth.uid() OR get_user_role() IN ('career_advisor', 'admin'));
 
 CREATE POLICY "cv_parsed_insert" ON cv_parsed_data
     FOR INSERT WITH CHECK (profile_id = auth.uid());

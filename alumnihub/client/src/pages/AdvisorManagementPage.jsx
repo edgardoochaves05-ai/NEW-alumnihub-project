@@ -214,6 +214,20 @@ export default function AdvisorManagementPage() {
     } catch (e) { console.error(e); }
   }
 
+  async function removeAdvisor(id) {
+    if (!window.confirm("Are you sure you want to remove this career advisor? Their role will be reverted to 'alumni'.")) return;
+    try {
+      await api.patch(`/profiles/${id}/role`, { role: "alumni" });
+      setAdvisors(prev => prev.filter(a => a.id !== id));
+      // Re-fetch assignments to reflect any cascade deletes
+      const { data: asgn } = await api.get("/advisor/assignments");
+      setAssignments(asgn || []);
+    } catch (e) { 
+      console.error(e); 
+      alert(e.response?.data?.error || "Failed to remove advisor."); 
+    }
+  }
+
   function onRoleAssigned(user) {
     setAdvisors(prev => [...prev, { id: user.id, first_name: user.first_name, last_name: user.last_name, email: user.email }]);
     setRoleModal(false);
@@ -269,9 +283,18 @@ export default function AdvisorManagementPage() {
                       <p className="text-sm font-medium text-gray-900">{a.first_name} {a.last_name}</p>
                       <p className="text-xs text-gray-400">{a.email}{a.department ? ` · ${a.department}` : ""}</p>
                     </div>
-                    <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
-                      {assignments.filter(x => x.advisor?.id === a.id).length} student{assignments.filter(x => x.advisor?.id === a.id).length !== 1 ? "s" : ""}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
+                        {assignments.filter(x => x.advisor?.id === a.id).length} student{assignments.filter(x => x.advisor?.id === a.id).length !== 1 ? "s" : ""}
+                      </span>
+                      <button
+                        onClick={() => removeAdvisor(a.id)}
+                        className="text-gray-400 hover:text-red-500 transition-colors"
+                        title="Remove advisor"
+                      >
+                        <Trash2 size={16}/>
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

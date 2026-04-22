@@ -10,7 +10,7 @@ ALTER TABLE profiles
 -- Step 2: Add the updated CHECK constraint that now includes 'student'
 ALTER TABLE profiles
   ADD CONSTRAINT profiles_role_check
-  CHECK (role IN ('alumni', 'faculty', 'admin', 'student'));
+  CHECK (role IN ('alumni', 'career_advisor', 'admin', 'student'));
 
 -- Step 3: Update the trigger function so it also validates 'student'
 --         (replaces the existing handle_new_user function)
