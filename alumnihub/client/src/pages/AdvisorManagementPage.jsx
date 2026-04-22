@@ -214,17 +214,16 @@ export default function AdvisorManagementPage() {
     } catch (e) { console.error(e); }
   }
 
-  async function removeAdvisor(id) {
-    if (!window.confirm("Are you sure you want to remove this career advisor? Their role will be reverted to 'alumni'.")) return;
+  async function removeAdvisorAssignments(id) {
+    if (!window.confirm("Are you sure you want to remove all students assigned to this career advisor?")) return;
     try {
-      await api.patch(`/profiles/${id}/role`, { role: "alumni" });
-      setAdvisors(prev => prev.filter(a => a.id !== id));
-      // Re-fetch assignments to reflect any cascade deletes
+      await api.delete(`/advisor/assignments/advisor/${id}`);
+      // Re-fetch assignments to reflect deletions
       const { data: asgn } = await api.get("/advisor/assignments");
       setAssignments(asgn || []);
     } catch (e) { 
       console.error(e); 
-      alert(e.response?.data?.error || "Failed to remove advisor."); 
+      alert(e.response?.data?.error || "Failed to remove assignments."); 
     }
   }
 
@@ -288,9 +287,10 @@ export default function AdvisorManagementPage() {
                         {assignments.filter(x => x.advisor?.id === a.id).length} student{assignments.filter(x => x.advisor?.id === a.id).length !== 1 ? "s" : ""}
                       </span>
                       <button
-                        onClick={() => removeAdvisor(a.id)}
+                        onClick={() => removeAdvisorAssignments(a.id)}
                         className="text-gray-400 hover:text-red-500 transition-colors"
-                        title="Remove advisor"
+                        title="Remove all assignments"
+                        disabled={assignments.filter(x => x.advisor?.id === a.id).length === 0}
                       >
                         <Trash2 size={16}/>
                       </button>
