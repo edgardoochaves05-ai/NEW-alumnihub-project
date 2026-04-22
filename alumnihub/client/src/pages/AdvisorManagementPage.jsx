@@ -62,7 +62,7 @@ function UserSearchInput({ placeholder, onSelect, roleFilter, disabled }) {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-gray-900 truncate">{u.first_name} {u.last_name}</p>
-                <p className="text-xs text-gray-400 truncate">{u.email} · <span className="capitalize">{u.role}</span></p>
+                <p className="text-xs text-gray-400 truncate">{u.email} · <span className="capitalize">{u.role === 'faculty' ? 'career advisor' : u.role}</span></p>
               </div>
             </button>
           ))}
@@ -84,7 +84,9 @@ function AssignRoleModal({ onClose, onSuccess }) {
     setSaving(true);
     setError("");
     try {
-      await api.patch(`/profiles/${selectedUser.id}/role`, { role: "career_advisor" });
+      // Send 'faculty' to the backend to satisfy the database check constraint
+      // but the UI will treat and display it as 'Career Advisor'.
+      await api.patch(`/profiles/${selectedUser.id}/role`, { role: "faculty" });
       onSuccess(selectedUser);
     } catch (err) {
       setError(err.response?.data?.error || "Failed to assign role.");
@@ -99,7 +101,7 @@ function AssignRoleModal({ onClose, onSuccess }) {
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18}/></button>
         </div>
         <div className="p-5 space-y-4">
-          <p className="text-sm text-gray-500">Search for a faculty member or existing user to assign the Career Advisor role. This role is hidden from public registration.</p>
+          <p className="text-sm text-gray-500">Search for a career advisor or existing user to assign the Career Advisor role. This role is hidden from public registration.</p>
           {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">{error}</div>}
           <UserSearchInput
             placeholder="Search by name or email…"

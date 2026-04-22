@@ -59,7 +59,9 @@ export default function Layout() {
                   ? `${profile.first_name} ${profile.last_name}`
                   : user?.email}
               </p>
-              <p className="text-xs text-gray-400 capitalize">{profile?.role || "User"}</p>
+              <p className="text-xs text-gray-400 capitalize">
+                {profile?.role === "faculty" ? "career advisor" : profile?.role || "User"}
+              </p>
             </div>
           </div>
         </div>
