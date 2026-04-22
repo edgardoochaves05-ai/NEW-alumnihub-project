@@ -75,7 +75,7 @@ router.put("/me", authenticate, async (req, res, next) => {
 });
 
 // ── Get student list (with filters) ──
-router.get("/students", authenticate, authorize("admin"), async (req, res, next) => {
+router.get("/students", authenticate, authorize("admin", "career_advisor"), async (req, res, next) => {
   try {
     const { program, search, page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;

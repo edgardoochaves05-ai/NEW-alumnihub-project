@@ -7,16 +7,15 @@ import {
 } from "lucide-react";
 
 const navItems = [
-  { to: "/dashboard",           icon: LayoutDashboard, label: "Dashboard",           roles: ["alumni", "student", "admin"] },
+  { to: "/dashboard",           icon: LayoutDashboard, label: "Dashboard",           roles: ["alumni", "student", "admin", "career_advisor"] },
   { to: "/profile",             icon: User,            label: "My Profile",           roles: ["alumni", "student"] },
   { to: "/alumni",              icon: Users,           label: "Alumni Directory",     roles: ["admin"] },
-  { to: "/students",            icon: BookOpen,        label: "Student Directory",    roles: ["admin"] },
-  { to: "/advisor/roster",      icon: ClipboardList,   label: "My Roster",            roles: ["career_advisor"] },
-  { to: "/jobs",                icon: Briefcase,       label: "Jobs",                 roles: ["alumni", "student", "admin", "career_advisor"] },
+  { to: "/students",            icon: BookOpen,        label: "Student Directory",    roles: ["admin", "career_advisor"] },
+  { to: "/jobs",                icon: Briefcase,       label: "Jobs",                 roles: ["alumni", "student", "admin"] },
   { to: "/messages",            icon: Mail,            label: "Inbox",                roles: ["alumni", "student", "admin", "career_advisor"] },
   { to: "/career-prediction",   icon: TrendingUp,      label: "Career Prediction",    roles: ["alumni"] },
-  { to: "/reports",             icon: BarChart3,       label: "Reports",              roles: ["admin"] },
-  { to: "/curriculum-impact",   icon: GraduationCap,   label: "Curriculum Impact",    roles: ["admin"] },
+  { to: "/reports",             icon: BarChart3,       label: "Reports",              roles: ["admin", "career_advisor"] },
+  { to: "/curriculum-impact",   icon: GraduationCap,   label: "Curriculum Impact",    roles: ["admin", "career_advisor"] },
   { to: "/advisor-management",  icon: UserCog,         label: "Advisor Management",   roles: ["admin"] },
   { to: "/settings",            icon: Settings,        label: "Settings",             roles: ["alumni", "student", "admin", "career_advisor"] },
 ];

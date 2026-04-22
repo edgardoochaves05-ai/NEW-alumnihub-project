@@ -649,6 +649,80 @@ function FacultyAdminDashboard({ profile }) {
   );
 }
 
+// ── Career Advisor Dashboard ───────────────────────────────────
+function CareerAdvisorDashboard({ profile }) {
+  const [totalStudents, setTotalStudents] = useState(0);
+  const [totalPrograms, setTotalPrograms] = useState(0);
+  const [announcements, setAnnouncements] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      api.get("/profiles/students?limit=1"),
+      api.get("/analytics/programs"),
+      api.get("/announcements?limit=5"),
+    ])
+      .then(([studentsRes, programsRes, annRes]) => {
+        setTotalStudents(studentsRes.data?.total || 0);
+        setTotalPrograms(programsRes.data?.length || 0);
+        
+        const annList = Array.isArray(annRes.data) ? annRes.data : (annRes.data?.announcements || []);
+        setAnnouncements(Array.isArray(annList) ? annList : []);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 size={28} className="animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Career Advisor Dashboard</h1>
+        <p className="text-gray-500 mt-1 text-sm">
+          Welcome, {profile?.first_name || "Advisor"}! Here's an overview of your students.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <StatCard icon={Users} label="Total Students" value={totalStudents} color="blue" to="/students" />
+        <StatCard icon={BookOpen} label="Active Programs" value={totalPrograms} color="green" />
+      </div>
+
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold text-gray-900">Announcements</h2>
+          <Bell size={16} className="text-gray-400" />
+        </div>
+        {announcements.length === 0 ? (
+          <p className="text-gray-400 text-sm text-center py-6">No announcements yet.</p>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {announcements.map((a) => (
+              <div key={a.id} className="py-3">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <p className="text-sm font-medium text-gray-900">{a.title}</p>
+                  <CategoryBadge category={a.category} />
+                </div>
+                <p className="text-xs text-gray-500 line-clamp-2">{a.content}</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Student Dashboard (Announcements only) ─────────────────────
 function StudentDashboard({ profile }) {
   const [announcements, setAnnouncements] = useState([]);
@@ -710,7 +784,7 @@ function StudentDashboard({ profile }) {
 
 // ── Main Export ────────────────────────────────────────────────
 export default function DashboardPage() {
-  const { profile, loading, isAlumni, isFaculty, isAdmin } = useAuth();
+  const { profile, loading, isAlumni, isFaculty, isAdmin, isCareerAdvisor } = useAuth();
 
   if (loading || !profile) {
     return (
@@ -723,6 +797,7 @@ export default function DashboardPage() {
   if (profile.role === "student") return <StudentDashboard profile={profile} />;
   if (isAlumni) return <AlumniDashboard profile={profile} />;
   if (isFaculty || isAdmin) return <FacultyAdminDashboard profile={profile} />;
+  if (isCareerAdvisor) return <CareerAdvisorDashboard profile={profile} />;
 
   // Unknown role — show alumni view as safe default
   return <AlumniDashboard profile={profile} />;

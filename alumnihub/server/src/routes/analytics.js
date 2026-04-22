@@ -109,7 +109,7 @@ router.get("/job-matches", authenticate, async (req, res, next) => {
 });
 
 // ── Curriculum Impact Analytics (Faculty/Admin) ──
-router.get("/curriculum-impact", authenticate, authorize("admin"), async (req, res, next) => {
+router.get("/curriculum-impact", authenticate, authorize("admin", "career_advisor"), async (req, res, next) => {
   try {
     const { program, yearStart, yearEnd } = req.query;
     if (!program) return res.status(400).json({ error: "Program parameter is required" });
@@ -125,7 +125,7 @@ router.get("/curriculum-impact", authenticate, authorize("admin"), async (req, r
 });
 
 // ── Available Programs ──
-router.get("/programs", authenticate, authorize("admin"), async (req, res, next) => {
+router.get("/programs", authenticate, authorize("admin", "career_advisor"), async (req, res, next) => {
   try {
     const programs = await getAvailablePrograms();
     res.json(programs);
@@ -135,7 +135,7 @@ router.get("/programs", authenticate, authorize("admin"), async (req, res, next)
 });
 
 // ── Job Posting Metrics (Admin only) ──
-router.get("/job-metrics", authenticate, authorize("admin"), async (req, res, next) => {
+router.get("/job-metrics", authenticate, authorize("admin", "career_advisor"), async (req, res, next) => {
   try {
     const { limit = 10 } = req.query;
 
@@ -187,7 +187,7 @@ router.get("/job-metrics", authenticate, authorize("admin"), async (req, res, ne
 });
 
 // ── Employment Trends ──
-router.get("/employment-trends", authenticate, authorize("admin"), async (req, res, next) => {
+router.get("/employment-trends", authenticate, authorize("admin", "career_advisor"), async (req, res, next) => {
   try {
     console.log("[ANALYTICS] GET /employment-trends - user:", req.user?.id);
     const { data: alumni } = await supabase
