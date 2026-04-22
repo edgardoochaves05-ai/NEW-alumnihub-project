@@ -10,8 +10,9 @@ import {
   Search, Filter, Briefcase, Building2, MapPin, Clock, Plus, X,
   ChevronLeft, ChevronRight, Loader2, Sparkles, ExternalLink,
   BookmarkPlus, Calendar, GraduationCap, User, Mail,
-  Code2, TrendingUp, Factory, ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp,
 } from "lucide-react";
+import JobMatchAnalytics from "../components/JobMatchAnalytics";
 
 const INDUSTRIES = ["Technology","Finance","Healthcare","Education","Engineering","Business","Government","Non-profit","Other"];
 const JOB_TYPES  = ["full-time","part-time","contract","internship","remote"];
@@ -25,111 +26,6 @@ function normalizeScore(score) {
   return Math.min(100, Math.round(raw));
 }
 
-// ── Match Analytics Helpers ────────────────────────────────────
-const EXP_LEVEL_ORDER = ["entry", "mid", "senior", "executive"];
-
-const PROGRAM_KEYWORD_MAP = {
-  "information technology": ["software","developer","engineer","systems","tech","web","data","network","devops","qa","it ","programmer"],
-  "information systems": ["systems analyst","business analyst","it","software","data","erp","database","analyst","systems"],
-  "computer science": ["software","developer","engineer","data scientist","machine learning","ai","algorithm","backend","frontend","fullstack"],
-  "computer engineering": ["embedded","firmware","hardware","systems","network","iot","developer","engineer"],
-  "business administration": ["business","management","marketing","sales","operations","hr","human resources","admin","supervisor"],
-  "accounting": ["accounting","finance","audit","tax","bookkeeping","cpa","controller","treasury"],
-  "engineering": ["engineer","technical","manufacturing","design","mechanical","civil","electrical","production"],
-  "nursing": ["nurse","medical","healthcare","clinical","patient","hospital"],
-  "education": ["teacher","instructor","tutor","professor","learning","curriculum","trainer"],
-  "marketing": ["marketing","brand","digital","content","social media","seo","campaign","creative"],
-  "communications": ["communications","pr","public relations","media","journalism","writing","content"],
-};
-
-function calcMatchBreakdown(job, profile) {
-  // Skills (40 %)
-  const required = (job.required_skills || []).map(s => s.toLowerCase().trim());
-  const userSkills = (profile.skills || []).map(s => s.toLowerCase().trim());
-  let skillsScore;
-  let matchedSkills = [];
-  if (required.length === 0) {
-    skillsScore = 70;
-  } else {
-    matchedSkills = required.filter(r => userSkills.some(u => u.includes(r) || r.includes(u)));
-    skillsScore = Math.round((matchedSkills.length / required.length) * 100);
-  }
-
-  // Experience (20 %)
-  let expScore;
-  const jobLevel = (job.experience_level || "").toLowerCase();
-  const gradYear = profile.graduation_year;
-  if (!jobLevel || !gradYear) {
-    expScore = 55;
-  } else {
-    const yearsOut = new Date().getFullYear() - gradYear;
-    const userIdx = yearsOut <= 2 ? 0 : yearsOut <= 5 ? 1 : yearsOut <= 10 ? 2 : 3;
-    const jobIdx = EXP_LEVEL_ORDER.indexOf(jobLevel);
-    const diff = jobIdx < 0 ? 1 : Math.abs(userIdx - jobIdx);
-    expScore = diff === 0 ? 100 : diff === 1 ? 65 : diff === 2 ? 30 : 15;
-  }
-
-  // Industry (25 %)
-  let industryScore;
-  const jobInd = (job.industry || "").toLowerCase();
-  const userInd = (profile.industry || "").toLowerCase();
-  if (!jobInd || !userInd) {
-    industryScore = 50;
-  } else if (jobInd === userInd) {
-    industryScore = 100;
-  } else if (jobInd.split(" ").some(w => w.length > 3 && userInd.includes(w))) {
-    industryScore = 60;
-  } else {
-    industryScore = 20;
-  }
-
-  // Program (15 %)
-  let programScore;
-  const programLower = (profile.program || "").toLowerCase();
-  const titleLower   = (job.title || "").toLowerCase();
-  const reqLower     = (job.requirements || "").toLowerCase();
-  let programMatched = false;
-  for (const [key, keywords] of Object.entries(PROGRAM_KEYWORD_MAP)) {
-    if (programLower.includes(key)) {
-      programMatched = keywords.some(k => titleLower.includes(k) || reqLower.includes(k));
-      break;
-    }
-  }
-  programScore = !programLower ? 50 : programMatched ? 90 : 35;
-
-  const total = Math.round(
-    skillsScore * 0.4 + expScore * 0.2 + industryScore * 0.25 + programScore * 0.15
-  );
-
-  return {
-    skills: skillsScore,
-    experience: expScore,
-    industry: industryScore,
-    program: programScore,
-    total,
-    matchedSkills: matchedSkills.map(s => s.replace(/\b\w/g, c => c.toUpperCase())),
-    requiredCount: required.length,
-  };
-}
-
-function generateMatchSummary(job, profile, breakdown, pct) {
-  const name  = profile.first_name ? `${profile.first_name}'s` : "Your";
-  const label = pct >= 75 ? "strong" : pct >= 55 ? "good" : "partial";
-
-  const highlights = [];
-  if (profile.program) highlights.push(profile.program);
-  if (breakdown.matchedSkills.length > 0) {
-    highlights.push(breakdown.matchedSkills.slice(0, 2).join(" & ") + " skills");
-  } else if ((profile.skills || []).length > 0) {
-    highlights.push((profile.skills || []).slice(0, 2).join(" & ") + " background");
-  }
-
-  if (highlights.length === 0) {
-    return `You are a ${label} ${pct}% match for this ${job.title} role at ${job.company}.`;
-  }
-  const verb = name === "Your" ? " make you" : " make";
-  return `${name} ${highlights.join(" and ")}${verb} a ${label} ${pct}% match for the ${job.title} role at ${job.company}.`;
-}
 
 function MatchBadge({ score }) {
   if (!score) return null;
@@ -223,82 +119,20 @@ function Top10MatchChart({ jobs, matchMap, onJobClick }) {
 }
 
 // ── Job Card ───────────────────────────────────────────────────
-function CriterionBar({ label, icon: Icon, score, weight }) {
-  const textCls = score >= 75 ? "text-green-700" : score >= 50 ? "text-blue-700" : "text-amber-600";
-  const barCls  = score >= 75 ? "bg-green-500"  : score >= 50 ? "bg-blue-500"  : "bg-amber-400";
-  const badgeCls = score >= 75
-    ? "bg-green-50 text-green-700"
-    : score >= 50
-    ? "bg-blue-50 text-blue-700"
-    : "bg-amber-50 text-amber-600";
-
-  return (
-    <div className="bg-white rounded-lg p-2.5 border border-gray-100 shadow-sm flex flex-col gap-1.5">
-      <div className="flex items-center gap-1.5">
-        <div className="w-5 h-5 rounded-md bg-blue-50 flex items-center justify-center flex-shrink-0">
-          <Icon size={11} className="text-blue-600"/>
-        </div>
-        <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide leading-none flex-1 min-w-0 truncate">
-          {label}
-        </span>
-        <span className={`text-[10px] font-bold ml-auto ${textCls}`}>{score}%</span>
-      </div>
-      <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-all duration-500 ${barCls}`}
-          style={{ width: `${score}%` }}
-        />
-      </div>
-      <div className="flex items-center justify-between">
-        <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full ${badgeCls}`}>
-          {score >= 75 ? "Strong" : score >= 50 ? "Good" : "Partial"}
-        </span>
-        <span className="text-[9px] text-gray-400">weight {weight}</span>
-      </div>
-    </div>
-  );
-}
-
 function JobCard({ job, matchScore, profile, onClick }) {
   const [showAnalytics, setShowAnalytics] = useState(false);
   const hasAnalytics = profile?.role === "alumni" && !!matchScore;
-  const overallPct = normalizeScore(matchScore);
-
-  const breakdown = useMemo(
-    () => (hasAnalytics ? calcMatchBreakdown(job, profile) : null),
-    // profile and job objects are stable enough — recalc only when ids change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [job.id, profile?.id, hasAnalytics]
-  );
-
-  const summary = useMemo(
-    () => (breakdown ? generateMatchSummary(job, profile, breakdown, overallPct) : ""),
-    [breakdown, job, profile, overallPct]
-  );
+  const overallPct   = normalizeScore(matchScore);
 
   const overallBadgeCls =
-    overallPct >= 75
-      ? "bg-green-100 text-green-700 border-green-200"
-      : overallPct >= 50
-      ? "bg-blue-100 text-blue-700 border-blue-200"
-      : "bg-gray-100 text-gray-500 border-gray-200";
-
-  const criteria = breakdown
-    ? [
-        { label: "Skills",     icon: Code2,        score: breakdown.skills,     weight: "40%" },
-        { label: "Experience", icon: TrendingUp,   score: breakdown.experience, weight: "20%" },
-        { label: "Industry",   icon: Factory,      score: breakdown.industry,   weight: "25%" },
-        { label: "Program",    icon: GraduationCap, score: breakdown.program,   weight: "15%" },
-      ]
-    : [];
+    overallPct >= 75 ? "bg-green-100 text-green-700 border-green-200" :
+    overallPct >= 50 ? "bg-blue-100 text-blue-700 border-blue-200"   :
+    "bg-gray-100 text-gray-500 border-gray-200";
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all flex flex-col">
       {/* ── Main card body ── */}
-      <div
-        onClick={() => onClick(job)}
-        className="flex flex-col gap-1.5 p-5 cursor-pointer flex-1"
-      >
+      <div onClick={() => onClick(job)} className="flex flex-col gap-1.5 p-5 cursor-pointer flex-1">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-gray-900 text-sm leading-snug mb-1">{job.title}</h3>
@@ -311,7 +145,6 @@ function JobCard({ job, matchScore, profile, onClick }) {
               </div>
             )}
           </div>
-
           <div className="flex flex-col items-end gap-2 flex-shrink-0">
             <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
               <Briefcase size={18} className="text-blue-600"/>
@@ -326,59 +159,18 @@ function JobCard({ job, matchScore, profile, onClick }) {
       </div>
 
       {/* ── Analytics accordion — alumni only ── */}
-      {hasAnalytics && breakdown && (
+      {hasAnalytics && (
         <div className="border-t border-gray-100">
           <button
             onClick={e => { e.stopPropagation(); setShowAnalytics(v => !v); }}
             className="w-full flex items-center justify-between px-5 py-2.5 text-xs font-semibold text-blue-600 hover:bg-blue-50/70 transition-colors"
           >
-            <span className="flex items-center gap-1.5">
-              <Sparkles size={11}/>View Match Details
-            </span>
+            <span className="flex items-center gap-1.5"><Sparkles size={11}/>View Match Details</span>
             {showAnalytics ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
           </button>
-
           {showAnalytics && (
-            <div
-              className="px-4 pb-4 bg-gradient-to-b from-blue-50/50 to-white"
-              onClick={e => e.stopPropagation()}
-            >
-              {/* Overall score pill */}
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide">
-                  Match Breakdown
-                </span>
-                <div className={`inline-flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full border ${overallBadgeCls}`}>
-                  <Sparkles size={10}/>{overallPct}% Overall Match
-                </div>
-              </div>
-
-              {/* 2 × 2 criteria grid */}
-              <div className="grid grid-cols-2 gap-2 mb-3">
-                {criteria.map(c => <CriterionBar key={c.label} {...c}/>)}
-              </div>
-
-              {/* Skill tags row */}
-              {breakdown.matchedSkills.length > 0 && (
-                <div className="flex flex-wrap gap-1 mb-3">
-                  {breakdown.matchedSkills.slice(0, 5).map(skill => (
-                    <span
-                      key={skill}
-                      className="inline-flex items-center gap-0.5 text-[10px] font-medium bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full"
-                    >
-                      <Code2 size={8}/>{skill}
-                    </span>
-                  ))}
-                  {breakdown.requiredCount > 5 && (
-                    <span className="text-[10px] text-gray-400">+{breakdown.requiredCount - 5} more</span>
-                  )}
-                </div>
-              )}
-
-              {/* Personalized summary */}
-              <p className="text-[11px] text-gray-600 leading-relaxed bg-white rounded-lg px-3 py-2.5 border border-gray-100 italic">
-                "{summary}"
-              </p>
+            <div onClick={e => e.stopPropagation()}>
+              <JobMatchAnalytics job={job} profile={profile} matchScore={matchScore} mode="compact"/>
             </div>
           )}
         </div>
@@ -388,8 +180,7 @@ function JobCard({ job, matchScore, profile, onClick }) {
 }
 
 // ── Job Detail Modal ───────────────────────────────────────────
-function JobDetailModal({ job, matchScore, onClose }) {
-  // Fire a unique view event whenever this modal opens for a different job
+function JobDetailModal({ job, matchScore, profile, onClose }) {
   useEffect(() => {
     if (job?.id) api.post(`/jobs/${job.id}/view`).catch(() => {});
   }, [job?.id]);
@@ -399,9 +190,13 @@ function JobDetailModal({ job, matchScore, onClose }) {
   };
 
   if (!job) return null;
+
+  const showAnalytics = profile?.role === "alumni" && !!matchScore;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        {/* ── Header ── */}
         <div className="flex items-start justify-between p-6 border-b border-gray-100">
           <div>
             <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -414,16 +209,16 @@ function JobDetailModal({ job, matchScore, onClose }) {
         </div>
 
         <div className="p-6 space-y-5">
-          {/* Meta */}
+          {/* ── Meta chips ── */}
           <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-            {job.location        && <span className="flex items-center gap-1.5"><MapPin size={14}/>{job.location}</span>}
-            {job.job_type        && <span className="flex items-center gap-1.5"><Clock size={14}/>{job.job_type}</span>}
-            {job.industry        && <span className="flex items-center gap-1.5"><Briefcase size={14}/>{job.industry}</span>}
+            {job.location         && <span className="flex items-center gap-1.5"><MapPin size={14}/>{job.location}</span>}
+            {job.job_type         && <span className="flex items-center gap-1.5"><Clock size={14}/>{job.job_type}</span>}
+            {job.industry         && <span className="flex items-center gap-1.5"><Briefcase size={14}/>{job.industry}</span>}
             {job.experience_level && <span className="flex items-center gap-1.5"><GraduationCap size={14}/>{job.experience_level} level</span>}
-            {job.expires_at      && <span className="flex items-center gap-1.5"><Calendar size={14}/>Deadline: {new Date(job.expires_at).toLocaleDateString()}</span>}
+            {job.expires_at       && <span className="flex items-center gap-1.5"><Calendar size={14}/>Deadline: {new Date(job.expires_at).toLocaleDateString()}</span>}
           </div>
 
-          {/* Salary */}
+          {/* ── Salary ── */}
           {(job.salary_min || job.salary_max) && (
             <p className="text-sm font-semibold text-green-700">
               Salary: ₱ {job.salary_min ? Number(job.salary_min).toLocaleString() : "?"}
@@ -431,7 +226,12 @@ function JobDetailModal({ job, matchScore, onClose }) {
             </p>
           )}
 
-          {/* Description */}
+          {/* ── AI Match Analytics panel (alumni only) ── */}
+          {showAnalytics && (
+            <JobMatchAnalytics job={job} profile={profile} matchScore={matchScore} mode="full"/>
+          )}
+
+          {/* ── Description ── */}
           {job.description && (
             <div>
               <h4 className="text-sm font-semibold text-gray-800 mb-2">Description</h4>
@@ -439,7 +239,7 @@ function JobDetailModal({ job, matchScore, onClose }) {
             </div>
           )}
 
-          {/* Requirements */}
+          {/* ── Requirements ── */}
           {job.requirements && (
             <div>
               <h4 className="text-sm font-semibold text-gray-800 mb-2">Requirements</h4>
@@ -447,7 +247,7 @@ function JobDetailModal({ job, matchScore, onClose }) {
             </div>
           )}
 
-          {/* Posted by */}
+          {/* ── Posted by ── */}
           {job.profiles && (
             <div className="flex items-center justify-between pt-3 mt-1 border-t border-gray-100">
               <div className="flex items-center gap-3">
@@ -469,7 +269,6 @@ function JobDetailModal({ job, matchScore, onClose }) {
                   </div>
                 </div>
               </div>
-              
               <Link to={`/profile/${job.posted_by}`} onClick={onClose}
                 className="btn-secondary inline-flex items-center gap-1.5 text-xs py-1.5 px-3">
                 <User size={13}/> View Profile
@@ -477,7 +276,7 @@ function JobDetailModal({ job, matchScore, onClose }) {
             </div>
           )}
 
-          {/* Action buttons */}
+          {/* ── Apply buttons ── */}
           {(job.application_url || job.application_email) && (
             <div className="flex flex-wrap gap-3 pt-2 border-t border-gray-100">
               {job.application_url && (
@@ -812,7 +611,7 @@ export default function JobsPage() {
       )}
 
       {selectedJob && (
-        <JobDetailModal job={selectedJob} matchScore={matchMap[selectedJob.id]} onClose={() => setSelectedJob(null)}/>
+        <JobDetailModal job={selectedJob} matchScore={matchMap[selectedJob.id]} profile={profile} onClose={() => setSelectedJob(null)}/>
       )}
       {showPost && (
         <PostJobModal onClose={() => setShowPost(false)} onCreated={newJob => { setJobs(prev => [newJob, ...prev]); setShowPost(false); }}/>
