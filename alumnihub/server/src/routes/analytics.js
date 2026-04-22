@@ -21,7 +21,7 @@ router.use((req, res, next) => {
   next();
 });
 
-// ── Dashboard Stats (Faculty/Admin) ──
+// ── Dashboard Stats (Career Advisor/Admin) ──
 router.get("/dashboard", authenticate, authorize("admin"), async (req, res, next) => {
   try {
     console.log("[ANALYTICS] GET /dashboard - user:", req.user?.id, "role:", req.profile?.role);
@@ -108,7 +108,7 @@ router.get("/job-matches", authenticate, async (req, res, next) => {
   }
 });
 
-// ── Curriculum Impact Analytics (Faculty/Admin) ──
+// ── Curriculum Impact Analytics (Career Advisor/Admin) ──
 router.get("/curriculum-impact", authenticate, authorize("admin", "career_advisor"), async (req, res, next) => {
   try {
     const { program, yearStart, yearEnd } = req.query;

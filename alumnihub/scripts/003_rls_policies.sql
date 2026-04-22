@@ -28,12 +28,12 @@ $$ LANGUAGE sql SECURITY DEFINER STABLE;
 -- PROFILES
 -- ══════════════════════════════
 -- Users can always see their own profile
--- Faculty/Admin can see all profiles
+-- Career Advisor/Admin can see all profiles
 -- Alumni can see non-private profiles only (private profiles hidden from alumni)
 CREATE POLICY "profiles_select" ON profiles
     FOR SELECT USING (
         id = auth.uid()                              -- Own profile always visible
-        OR get_user_role() IN ('career_advisor', 'admin')   -- Faculty/Admin see everyone
+        OR get_user_role() IN ('career_advisor', 'admin')   -- Career Advisor/Admin see everyone
         OR (is_private = false AND is_active = true)  -- Public profiles visible to all
     );
 
@@ -41,7 +41,7 @@ CREATE POLICY "profiles_select" ON profiles
 CREATE POLICY "profiles_update_own" ON profiles
     FOR UPDATE USING (id = auth.uid());
 
--- Faculty/Admin can update any profile
+-- Career Advisor/Admin can update any profile
 CREATE POLICY "profiles_update_admin" ON profiles
     FOR UPDATE USING (get_user_role() IN ('career_advisor', 'admin'));
 
@@ -90,7 +90,7 @@ CREATE POLICY "match_select_own" ON job_match_scores
 -- ══════════════════════════════
 -- CAREER PREDICTIONS (AI)
 -- ══════════════════════════════
--- Users see their own predictions; faculty/admin can see all
+-- Users see their own predictions; career advisor/admin can see all
 CREATE POLICY "predictions_select" ON career_predictions
     FOR SELECT USING (
         profile_id = auth.uid()
@@ -100,7 +100,7 @@ CREATE POLICY "predictions_select" ON career_predictions
 -- ══════════════════════════════
 -- CURRICULUM IMPACT (AI)
 -- ══════════════════════════════
--- Faculty and admin only
+-- Career Advisor and admin only
 CREATE POLICY "curriculum_select" ON curriculum_impact
     FOR SELECT USING (get_user_role() IN ('career_advisor', 'admin'));
 
@@ -147,7 +147,7 @@ CREATE POLICY "feedback_update_admin" ON feedback
 CREATE POLICY "announcements_select" ON announcements
     FOR SELECT USING (is_published = true OR get_user_role() IN ('career_advisor', 'admin'));
 
--- Faculty/Admin can create and manage
+-- Career Advisor/Admin can create and manage
 CREATE POLICY "announcements_insert" ON announcements
     FOR INSERT WITH CHECK (get_user_role() IN ('career_advisor', 'admin'));
 

@@ -90,7 +90,7 @@ export const messageRequestService = {
   decline: (requestId) => api.patch(`/message-requests/${requestId}/decline`),
 };
 
-// ── Analytics (Faculty/Admin) ──
+// ── Analytics (Career Advisor/Admin) ──
 export const analyticsService = {
   getDashboardStats: () => api.get("/analytics/dashboard"),
   getCareerPredictions: (profileId) =>

@@ -3,7 +3,7 @@
 -- Run this in: Supabase Dashboard → SQL Editor
 -- ============================================================
 
--- Step 1: Drop the old CHECK constraint that only allowed alumni/faculty/admin
+-- Step 1: Drop the old CHECK constraint that only allowed alumni/career_advisor/admin
 ALTER TABLE profiles
   DROP CONSTRAINT IF EXISTS profiles_role_check;
 

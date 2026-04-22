@@ -530,7 +530,7 @@ export default function ProfilePage() {
     setSendingMsg(true);
     setMsgError("");
     try {
-      // Faculty bypass: even for private profiles, go straight to inbox
+      // Career Advisor bypass: even for private profiles, go straight to inbox
       const sendAsRequest = profile.is_private && authProfile?.role !== "career_advisor";
       if (sendAsRequest) {
         // Private profile (non-career_advisor sender) → message request
@@ -657,7 +657,7 @@ export default function ProfilePage() {
   const showAlumniSections  = profile.role === "alumni" || profile.role === "student";
   const showProfessionalInfo = profile.role !== "student";
   const showMilestones       = profile.role === "alumni";
-  // Admin and Faculty always see full profiles regardless of privacy setting
+  // Admin and Career Advisor always see full profiles regardless of privacy setting
   const isPrivateOther = !isOwnProfile && !!profile.is_private && !["admin", "career_advisor"].includes(authProfile?.role);
   // For messaging: Career Advisor bypass privacy → message goes straight to inbox, not requests
   const isMsgRequest = !isOwnProfile && !!profile.is_private && authProfile?.role !== "career_advisor";

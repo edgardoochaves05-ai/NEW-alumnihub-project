@@ -393,10 +393,10 @@ function AlumniDashboard({ profile }) {
   );
 }
 
-// ── Faculty / Admin Dashboard ──────────────────────────────────
+// ── Admin Dashboard ──────────────────────────────────
 const CHART_COLORS = ["#2563eb", "#16a34a", "#9333ea", "#d97706", "#dc2626"];
 
-function FacultyAdminDashboard({ profile }) {
+function AdminDashboard({ profile }) {
   const [stats, setStats] = useState(null);
   const [trends, setTrends] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
@@ -845,7 +845,7 @@ export default function DashboardPage() {
 
   if (profile.role === "student") return <StudentDashboard profile={profile} />;
   if (isAlumni) return <AlumniDashboard profile={profile} />;
-  if (isAdmin) return <FacultyAdminDashboard profile={profile} />;
+  if (isAdmin) return <AdminDashboard profile={profile} />;
   if (isCareerAdvisor) return <CareerAdvisorDashboard profile={profile} />;
 
   // Unknown role — show alumni view as safe default

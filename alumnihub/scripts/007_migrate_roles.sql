@@ -2,7 +2,7 @@
 ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
 ALTER TABLE public.announcements DROP CONSTRAINT IF EXISTS announcements_target_audience_check;
 
--- 2. Update existing 'faculty' data to 'career_advisor'
+-- 2. Update existing 'faculty' data to 'career_advisor' (one-time migration)
 UPDATE public.profiles SET role = 'career_advisor' WHERE role = 'faculty';
 UPDATE public.announcements SET target_audience = 'career_advisor' WHERE target_audience = 'faculty';
 

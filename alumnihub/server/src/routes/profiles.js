@@ -217,7 +217,7 @@ router.patch("/:id/role", authenticate, authorize("admin"), async (req, res, nex
   } catch (err) { next(err); }
 });
 
-// ── Verify alumni (Faculty/Admin) ──
+// ── Verify alumni (Career Advisor/Admin) ──
 router.patch("/:id/verify", authenticate, authorize("admin"), async (req, res, next) => {
   try {
     const { data, error } = await supabase
