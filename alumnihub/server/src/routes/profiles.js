@@ -38,7 +38,7 @@ router.put("/me", authenticate, async (req, res, next) => {
 
     // Server-side required field validation
     const { data: currentProfile } = await supabase
-      .from("profiles").select("role").eq("id", req.user.id).single();
+      .from("profiles").select("*").eq("id", req.user.id).single();
 
     const role = currentProfile?.role || req.profile?.role;
     const REQUIRED_PERSONAL = ["first_name", "last_name", "phone", "date_of_birth", "gender", "city", "address"];
@@ -49,7 +49,7 @@ router.put("/me", authenticate, async (req, res, next) => {
     ];
 
     const missing = requiredFields.filter(f => {
-      const val = updates[f];
+      const val = updates[f] !== undefined ? updates[f] : currentProfile?.[f];
       return val === undefined || val === null || val.toString().trim() === "";
     });
 
