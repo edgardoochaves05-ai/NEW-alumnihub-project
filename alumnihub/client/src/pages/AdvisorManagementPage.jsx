@@ -62,7 +62,7 @@ function UserSearchInput({ placeholder, onSelect, roleFilter, disabled }) {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-gray-900 truncate">{u.first_name} {u.last_name}</p>
-                <p className="text-xs text-gray-400 truncate">{u.email} · <span className="capitalize">{u.role === 'faculty' ? 'career advisor' : u.role}</span></p>
+                <p className="text-xs text-gray-400 truncate">{u.email} · <span className="capitalize">{u.role === 'career_advisor' ? 'career advisor' : u.role}</span></p>
               </div>
             </button>
           ))}
@@ -84,9 +84,7 @@ function AssignRoleModal({ onClose, onSuccess }) {
     setSaving(true);
     setError("");
     try {
-      // Send 'faculty' to the backend to satisfy the database check constraint
-      // but the UI will treat and display it as 'Career Advisor'.
-      await api.patch(`/profiles/${selectedUser.id}/role`, { role: "faculty" });
+      await api.patch(`/profiles/${selectedUser.id}/role`, { role: "career_advisor" });
       onSuccess(selectedUser);
     } catch (err) {
       setError(err.response?.data?.error || "Failed to assign role.");

@@ -531,15 +531,15 @@ export default function ProfilePage() {
     setMsgError("");
     try {
       // Faculty bypass: even for private profiles, go straight to inbox
-      const sendAsRequest = profile.is_private && authProfile?.role !== "faculty";
+      const sendAsRequest = profile.is_private && authProfile?.role !== "career_advisor";
       if (sendAsRequest) {
-        // Private profile (non-faculty sender) → message request
+        // Private profile (non-career_advisor sender) → message request
         await api.post("/message-requests", {
           recipientId: profileId,
           message: msgContent.trim() || undefined,
         });
       } else {
-        // Public profile OR faculty sender → deliver directly to inbox
+        // Public profile OR career_advisor sender → deliver directly to inbox
         await api.post("/messages", {
           recipientId: profileId,
           content: msgContent.trim(),
@@ -658,9 +658,9 @@ export default function ProfilePage() {
   const showProfessionalInfo = profile.role !== "student";
   const showMilestones       = profile.role === "alumni";
   // Admin and Faculty always see full profiles regardless of privacy setting
-  const isPrivateOther = !isOwnProfile && !!profile.is_private && !["admin", "faculty"].includes(authProfile?.role);
-  // For messaging: Faculty bypass privacy → message goes straight to inbox, not requests
-  const isMsgRequest = !isOwnProfile && !!profile.is_private && authProfile?.role !== "faculty";
+  const isPrivateOther = !isOwnProfile && !!profile.is_private && !["admin", "career_advisor"].includes(authProfile?.role);
+  // For messaging: Career Advisor bypass privacy → message goes straight to inbox, not requests
+  const isMsgRequest = !isOwnProfile && !!profile.is_private && authProfile?.role !== "career_advisor";
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -722,7 +722,7 @@ export default function ProfilePage() {
                 </span>
               )}
             </div>
-            <p className="text-sm text-gray-500 mt-0.5 capitalize">{profile.role === "faculty" ? "career advisor" : profile.role}</p>
+            <p className="text-sm text-gray-500 mt-0.5 capitalize">{profile.role === "career_advisor" ? "career advisor" : profile.role}</p>
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-gray-500">
               {profile.current_job_title && (

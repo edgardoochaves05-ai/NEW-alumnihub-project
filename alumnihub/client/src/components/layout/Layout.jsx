@@ -59,7 +59,7 @@ export default function Layout() {
                   : user?.email}
               </p>
               <p className="text-xs text-gray-400 capitalize">
-                {profile?.role === "faculty" ? "career advisor" : profile?.role || "User"}
+                {profile?.role ? profile.role.replace("_", " ") : "User"}
               </p>
             </div>
           </div>

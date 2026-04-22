@@ -784,7 +784,7 @@ function StudentDashboard({ profile }) {
 
 // ── Main Export ────────────────────────────────────────────────
 export default function DashboardPage() {
-  const { profile, loading, isAlumni, isFaculty, isAdmin, isCareerAdvisor } = useAuth();
+  const { profile, loading, isAlumni, isAdmin, isCareerAdvisor } = useAuth();
 
   if (loading || !profile) {
     return (
@@ -796,7 +796,7 @@ export default function DashboardPage() {
 
   if (profile.role === "student") return <StudentDashboard profile={profile} />;
   if (isAlumni) return <AlumniDashboard profile={profile} />;
-  if (isFaculty || isAdmin) return <FacultyAdminDashboard profile={profile} />;
+  if (isAdmin) return <FacultyAdminDashboard profile={profile} />;
   if (isCareerAdvisor) return <CareerAdvisorDashboard profile={profile} />;
 
   // Unknown role — show alumni view as safe default
