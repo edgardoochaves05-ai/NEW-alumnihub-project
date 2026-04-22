@@ -18,6 +18,7 @@ const analyticsRoutes = require("./routes/analytics.js");
 const feedbackRoutes = require("./routes/feedback.js");
 const messageRequestRoutes = require("./routes/messageRequests.js");
 const announcementRoutes = require("./routes/announcements.js");
+const advisorRoutes = require("./routes/advisor.js");
 
 console.log("[APP] All routes imported successfully");
 
@@ -83,6 +84,7 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/message-requests", messageRequestRoutes);
 app.use("/api/announcements", announcementRoutes);
+app.use("/api/advisor", advisorRoutes);
 
 console.log("[APP] Routes registered");
 

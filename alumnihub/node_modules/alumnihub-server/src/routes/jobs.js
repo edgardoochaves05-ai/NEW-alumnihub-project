@@ -12,7 +12,7 @@ router.get("/", authenticate, async (req, res, next) => {
 
     let query = supabase
       .from("job_listings")
-      .select("*, profiles!posted_by(first_name, last_name, role)", { count: "exact" })
+      .select("*, profiles!posted_by(id, first_name, last_name, role, avatar_url)", { count: "exact" })
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
@@ -36,7 +36,7 @@ router.get("/matched", authenticate, async (req, res, next) => {
   try {
     const { data, error } = await supabase
       .from("job_match_scores")
-      .select("*, job_listings(*)")
+      .select("*, job_listings(*, profiles!posted_by(id, first_name, last_name, role, avatar_url))")
       .eq("profile_id", req.user.id)
       .order("match_score", { ascending: false })
       .limit(20);
@@ -48,12 +48,38 @@ router.get("/matched", authenticate, async (req, res, next) => {
   }
 });
 
+// ── Record a unique view (opens modal) ──
+router.post("/:id/view", authenticate, async (req, res, next) => {
+  try {
+    await supabase
+      .from("job_interactions")
+      .upsert(
+        { job_id: req.params.id, profile_id: req.user.id, interaction_type: "view" },
+        { onConflict: "job_id,profile_id,interaction_type", ignoreDuplicates: true }
+      );
+    res.json({ success: true });
+  } catch (err) { next(err); }
+});
+
+// ── Record a unique inquiry (apply button click) ──
+router.post("/:id/inquire", authenticate, async (req, res, next) => {
+  try {
+    await supabase
+      .from("job_interactions")
+      .upsert(
+        { job_id: req.params.id, profile_id: req.user.id, interaction_type: "inquiry" },
+        { onConflict: "job_id,profile_id,interaction_type", ignoreDuplicates: true }
+      );
+    res.json({ success: true });
+  } catch (err) { next(err); }
+});
+
 // ── Get single job ──
 router.get("/:id", authenticate, async (req, res, next) => {
   try {
     const { data, error } = await supabase
       .from("job_listings")
-      .select("*, profiles!posted_by(first_name, last_name)")
+      .select("*, profiles!posted_by(id, first_name, last_name, role, avatar_url)")
       .eq("id", req.params.id)
       .single();
 

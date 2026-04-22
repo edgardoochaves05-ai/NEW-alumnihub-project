@@ -4,12 +4,12 @@ import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis,
-  CartesianGrid, Tooltip, ResponsiveContainer, Cell,
+  CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList,
 } from "recharts";
 import {
   Users, Briefcase, TrendingUp,
   Mail, Bell, ChevronRight, Award, BookOpen,
-  ArrowUpRight, Loader2, Plus, X,
+  ArrowUpRight, Loader2, Plus, X, Eye, Send,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -351,6 +351,7 @@ function FacultyAdminDashboard({ profile }) {
   const [stats, setStats] = useState(null);
   const [trends, setTrends] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
+  const [jobMetrics, setJobMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
 
@@ -387,6 +388,11 @@ function FacultyAdminDashboard({ profile }) {
       .finally(() => setLoading(false));
 
     fetchAnnouncements();
+
+    // Non-critical: job metrics widget
+    api.get("/analytics/job-metrics?limit=5")
+      .then(({ data }) => setJobMetrics(data))
+      .catch(() => {});
   }, []);
 
   if (loading) {
@@ -464,6 +470,48 @@ function FacultyAdminDashboard({ profile }) {
         </div>
       </div>
 
+      {/* Alumni per Program — full width bar chart */}
+      {topPrograms.length > 0 && (
+        <div className="card">
+          <h2 className="font-semibold text-gray-900 mb-1">Alumni per Program</h2>
+          <p className="text-xs text-gray-500 mb-4">Total number of registered alumni in each program</p>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart
+              data={topPrograms}
+              margin={{ top: 24, right: 16, left: -20, bottom: 48 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis
+                dataKey="program"
+                tick={{ fontSize: 10 }}
+                angle={-30}
+                textAnchor="end"
+                interval={0}
+                tickFormatter={(v) => v.replace("BS ", "").replace("Bachelor of Science in ", "")}
+              />
+              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+              <Tooltip
+                formatter={(v, _name, props) => [
+                  `${v} alumni`,
+                  props.payload?.program,
+                ]}
+              />
+              <Bar dataKey="total" radius={[4, 4, 0, 0]} name="Alumni">
+                {topPrograms.map((_, i) => (
+                  <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                ))}
+                {/* Exact count label on top of each bar */}
+                <LabelList
+                  dataKey="total"
+                  position="top"
+                  style={{ fontSize: 12, fontWeight: 700, fill: "#374151" }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
       {/* Bottom row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Program table */}
@@ -537,6 +585,55 @@ function FacultyAdminDashboard({ profile }) {
           )}
         </div>
       </div>
+
+      {/* Job Posting Engagement */}
+      {jobMetrics && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <div>
+              <h2 className="font-semibold text-gray-900">Job Posting Engagement</h2>
+              <p className="text-xs text-gray-500 mt-0.5">Top listings by views and application inquiries</p>
+            </div>
+            <div className="flex items-center gap-4 flex-shrink-0">
+              <span className="flex items-center gap-1.5 text-xs text-gray-500">
+                <Eye size={13} className="text-blue-500"/>{jobMetrics.summary.totalViews} views
+              </span>
+              <span className="flex items-center gap-1.5 text-xs text-gray-500">
+                <Send size={13} className="text-green-500"/>{jobMetrics.summary.totalInquiries} inquiries
+              </span>
+              <Link to="/reports" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                Full report <ChevronRight size={12}/>
+              </Link>
+            </div>
+          </div>
+          {jobMetrics.topByEngagement.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-6">No engagement data yet. Views are tracked when users open job listings.</p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {jobMetrics.topByEngagement.map((job, i) => (
+                <div key={job.id} className="py-3 flex items-center gap-3">
+                  <span className="text-xs font-bold text-gray-300 w-4 flex-shrink-0">#{i + 1}</span>
+                  <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+                    <Briefcase size={14} className="text-blue-600"/>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{job.title}</p>
+                    <p className="text-xs text-gray-500 truncate">{job.company}</p>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs flex-shrink-0">
+                    <span className="flex items-center gap-1 text-gray-500">
+                      <Eye size={11} className="text-blue-400"/>{job.views}
+                    </span>
+                    <span className="flex items-center gap-1 text-gray-500">
+                      <Send size={11} className="text-green-400"/>{job.inquiries}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Announcement Modal */}
       {showModal && (

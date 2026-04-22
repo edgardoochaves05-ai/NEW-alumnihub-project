@@ -3,6 +3,7 @@ export const ROLES = {
   ALUMNI: "alumni",
   FACULTY: "faculty",
   ADMIN: "admin",
+  CAREER_ADVISOR: "career_advisor",
 };
 
 // Job types

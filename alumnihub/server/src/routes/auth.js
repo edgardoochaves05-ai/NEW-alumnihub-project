@@ -28,9 +28,14 @@ router.post("/register", async (req, res, next) => {
       return res.status(400).json({ error: "Email and password are required" });
     }
 
-    const validRoles = ["alumni", "faculty", "admin", "student"];
+    const validRoles = ["alumni", "student", "faculty"];
     if (!validRoles.includes(role)) {
       return res.status(400).json({ error: "Invalid role" });
+    }
+
+    // Block institutional tip.edu.ph emails — Supabase does not permit them
+    if (email.toLowerCase().endsWith("@tip.edu.ph")) {
+      return res.status(400).json({ error: "TIP institutional emails (@tip.edu.ph) are not permitted. Please use a personal email (e.g. Gmail)." });
     }
 
     // Use the anon client so Supabase applies its normal email-confirmation

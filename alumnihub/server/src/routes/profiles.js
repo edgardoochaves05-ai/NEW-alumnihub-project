@@ -36,6 +36,28 @@ router.put("/me", authenticate, async (req, res, next) => {
       if (req.body[field] !== undefined) updates[field] = req.body[field];
     }
 
+    // Server-side required field validation
+    const { data: currentProfile } = await supabase
+      .from("profiles").select("role").eq("id", req.user.id).single();
+
+    const role = currentProfile?.role || req.profile?.role;
+    const REQUIRED_PERSONAL = ["first_name", "last_name", "phone", "date_of_birth", "gender", "city", "address"];
+    const REQUIRED_ACADEMIC = ["student_number", "program", "department", "graduation_year", "batch_year"];
+    const requiredFields = [
+      ...REQUIRED_PERSONAL,
+      ...(["alumni", "student"].includes(role) ? REQUIRED_ACADEMIC : []),
+    ];
+
+    const missing = requiredFields.filter(f => {
+      const val = updates[f];
+      return val === undefined || val === null || val.toString().trim() === "";
+    });
+
+    if (missing.length > 0) {
+      const readable = missing.map(f => f.replace(/_/g, " ")).join(", ");
+      return res.status(400).json({ error: `Missing required fields: ${readable}` });
+    }
+
     const { data, error } = await supabase
       .from("profiles")
       .upsert(
@@ -53,7 +75,7 @@ router.put("/me", authenticate, async (req, res, next) => {
 });
 
 // ── Get student list (with filters) ──
-router.get("/students", authenticate, authorize("faculty", "admin"), async (req, res, next) => {
+router.get("/students", authenticate, authorize("admin"), async (req, res, next) => {
   try {
     const { program, search, page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
@@ -205,8 +227,28 @@ router.post("/avatar", authenticate, async (req, res, next) => {
   }
 });
 
+// ── Assign role to a user (Admin only — career_advisor is set here, not on registration) ──
+router.patch("/:id/role", authenticate, authorize("admin"), async (req, res, next) => {
+  try {
+    const { role } = req.body;
+    const ALLOWED_ROLES = ["alumni", "student", "faculty", "career_advisor", "admin"];
+    if (!ALLOWED_ROLES.includes(role)) {
+      return res.status(400).json({ error: `Invalid role. Must be one of: ${ALLOWED_ROLES.join(", ")}` });
+    }
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({ role })
+      .eq("id", req.params.id)
+      .select("id, first_name, last_name, email, role")
+      .single();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: "Profile not found" });
+    res.json(data);
+  } catch (err) { next(err); }
+});
+
 // ── Verify alumni (Faculty/Admin) ──
-router.patch("/:id/verify", authenticate, authorize("faculty", "admin"), async (req, res, next) => {
+router.patch("/:id/verify", authenticate, authorize("admin"), async (req, res, next) => {
   try {
     const { data, error } = await supabase
       .from("profiles")

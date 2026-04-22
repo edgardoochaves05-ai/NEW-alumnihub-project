@@ -3,20 +3,22 @@ import { useAuth } from "../../context/AuthContext";
 import {
   LayoutDashboard, User, Users, Briefcase, Mail,
   BarChart3, Settings, LogOut, TrendingUp, GraduationCap, BookOpen,
+  ClipboardList, UserCog,
 } from "lucide-react";
 
 const navItems = [
-  { to: "/dashboard",         icon: LayoutDashboard, label: "Dashboard",         roles: ["alumni", "student", "faculty", "admin"] },
-  { to: "/profile",           icon: User,            label: "My Profile",         roles: ["alumni", "student", "faculty"] },
-  { to: "/alumni",            icon: Users,           label: "Alumni Directory",   roles: ["faculty", "admin"] },
-  { to: "/students",          icon: BookOpen,        label: "Student Directory",  roles: ["faculty", "admin"] },
-  { to: "/faculty-directory", icon: Users,           label: "Faculty Directory",  roles: ["admin"] },
-  { to: "/jobs",              icon: Briefcase,       label: "Jobs",               roles: ["alumni", "student", "faculty", "admin"] },
-  { to: "/messages",          icon: Mail,            label: "Inbox",              roles: ["alumni", "student", "faculty"] },
-  { to: "/career-prediction", icon: TrendingUp,      label: "Career Prediction",  roles: ["faculty", "admin"] },
-  { to: "/reports",           icon: BarChart3,       label: "Reports",            roles: ["faculty", "admin"] },
-  { to: "/curriculum-impact", icon: GraduationCap,   label: "Curriculum Impact",  roles: ["faculty", "admin"] },
-  { to: "/settings",          icon: Settings,        label: "Settings",           roles: ["alumni", "student", "faculty", "admin"] },
+  { to: "/dashboard",           icon: LayoutDashboard, label: "Dashboard",           roles: ["alumni", "student", "admin"] },
+  { to: "/profile",             icon: User,            label: "My Profile",           roles: ["alumni", "student"] },
+  { to: "/alumni",              icon: Users,           label: "Alumni Directory",     roles: ["admin"] },
+  { to: "/students",            icon: BookOpen,        label: "Student Directory",    roles: ["admin"] },
+  { to: "/advisor/roster",      icon: ClipboardList,   label: "My Roster",            roles: ["career_advisor"] },
+  { to: "/jobs",                icon: Briefcase,       label: "Jobs",                 roles: ["alumni", "student", "admin", "career_advisor"] },
+  { to: "/messages",            icon: Mail,            label: "Inbox",                roles: ["alumni", "student", "admin", "career_advisor"] },
+  { to: "/career-prediction",   icon: TrendingUp,      label: "Career Prediction",    roles: ["alumni"] },
+  { to: "/reports",             icon: BarChart3,       label: "Reports",              roles: ["admin"] },
+  { to: "/curriculum-impact",   icon: GraduationCap,   label: "Curriculum Impact",    roles: ["admin"] },
+  { to: "/advisor-management",  icon: UserCog,         label: "Advisor Management",   roles: ["admin"] },
+  { to: "/settings",            icon: Settings,        label: "Settings",             roles: ["alumni", "student", "admin", "career_advisor"] },
 ];
 
 export default function Layout() {
@@ -57,7 +59,9 @@ export default function Layout() {
                   ? `${profile.first_name} ${profile.last_name}`
                   : user?.email}
               </p>
-              <p className="text-xs text-gray-400 capitalize">{profile?.role || "User"}</p>
+              <p className="text-xs text-gray-400 capitalize">
+                {profile?.role === "faculty" ? "career advisor" : profile?.role || "User"}
+              </p>
             </div>
           </div>
         </div>
