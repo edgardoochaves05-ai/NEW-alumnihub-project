@@ -1,6 +1,7 @@
 const { Router } = require("express");
 const { authenticate, authorize } = require("../middleware/auth.js");
 const { supabase } = require("../config/supabase.js");
+const { computeJobMatches } = require("../services/ai/index.js");
 
 const router = Router();
 
@@ -34,7 +35,7 @@ router.get("/", authenticate, async (req, res, next) => {
 // ── Get matched jobs (AI) ──
 router.get("/matched", authenticate, async (req, res, next) => {
   try {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("job_match_scores")
       .select("*, job_listings(*, profiles!posted_by(id, first_name, last_name, role, avatar_url))")
       .eq("profile_id", req.user.id)
@@ -42,6 +43,20 @@ router.get("/matched", authenticate, async (req, res, next) => {
       .limit(20);
 
     if (error) throw error;
+
+    // No scores yet for this user — compute on-demand and re-query
+    if (!data || data.length === 0) {
+      await computeJobMatches(req.user.id);
+      const { data: fresh, error: freshError } = await supabase
+        .from("job_match_scores")
+        .select("*, job_listings(*, profiles!posted_by(id, first_name, last_name, role, avatar_url))")
+        .eq("profile_id", req.user.id)
+        .order("match_score", { ascending: false })
+        .limit(20);
+      if (freshError) throw freshError;
+      data = fresh;
+    }
+
     res.json(data);
   } catch (err) {
     next(err);
