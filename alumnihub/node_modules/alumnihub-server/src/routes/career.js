@@ -124,17 +124,35 @@ router.delete("/milestones/:id", authenticate, async (req, res, next) => {
 
 // ── AI Diagnostic (public, no auth) ──
 router.get("/test-ai", async (req, res) => {
-  const keySet = !!process.env.GEMINI_API_KEY;
-  if (!keySet) {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) {
     return res.json({ ok: false, step: "env", error: "GEMINI_API_KEY is not set" });
   }
   try {
+    // Step 1: list available models for this key
+    const listRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`
+    );
+    const listData = await listRes.json();
+    if (!listRes.ok) {
+      return res.json({ ok: false, step: "list-models", error: listData });
+    }
+    const models = (listData.models || [])
+      .filter(m => m.supportedGenerationMethods?.includes("generateContent"))
+      .map(m => m.name);
+
+    // Step 2: try the first available generateContent model
+    const modelName = models[0];
+    if (!modelName) {
+      return res.json({ ok: false, step: "no-models", availableModels: models });
+    }
+
     const { GoogleGenerativeAI } = require("@google/generative-ai");
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const genAI = new GoogleGenerativeAI(key);
+    const model = genAI.getGenerativeModel({ model: modelName.replace("models/", "") });
     const result = await model.generateContent('Reply with exactly: {"ok":true}');
     const text = result.response.text().trim();
-    res.json({ ok: true, step: "gemini", response: text });
+    res.json({ ok: true, usedModel: modelName, availableModels: models, response: text });
   } catch (err) {
     res.json({ ok: false, step: "gemini", error: err.message });
   }
