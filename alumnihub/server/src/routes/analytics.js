@@ -21,13 +21,30 @@ router.use((req, res, next) => {
   next();
 });
 
-// ── Dashboard Stats (Career Advisor/Admin) ──
-router.get("/dashboard", authenticate, authorize("admin", "career_advisor"), async (req, res, next) => {
+// ── Dashboard Stats (Admin + Career Advisor) ──
+router.get("/dashboard", authenticate, authorize("admin", "career_advisor", "faculty"), async (req, res, next) => {
   try {
     console.log("[ANALYTICS] GET /dashboard - user:", req.user?.id, "role:", req.profile?.role);
     const stats = await getOverallStats();
+
+    // Student counts — surfaced for career advisors in the Reports page
+    const { data: studentRows, count: totalStudents } = await supabase
+      .from("profiles")
+      .select("program", { count: "exact" })
+      .eq("role", "student")
+      .eq("is_active", true);
+
+    const programMap = {};
+    for (const s of studentRows || []) {
+      const prog = s.program || "Unspecified";
+      programMap[prog] = (programMap[prog] || 0) + 1;
+    }
+    const studentsPerProgram = Object.entries(programMap)
+      .map(([program, count]) => ({ program, count }))
+      .sort((a, b) => b.count - a.count);
+
     console.log("[ANALYTICS] Dashboard stats fetched");
-    res.json(stats);
+    res.json({ ...stats, totalStudents: totalStudents || 0, studentsPerProgram });
   } catch (err) {
     console.error("[ANALYTICS] Dashboard error:", err.message);
     next(err);

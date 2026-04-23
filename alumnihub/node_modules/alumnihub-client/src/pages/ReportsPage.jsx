@@ -100,7 +100,7 @@ export default function ReportsPage() {
         </button>
       </div>
 
-      {/* Stat Cards */}
+      {/* Stat Cards — Alumni */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Total Alumni" value={stats?.totalAlumni?.toLocaleString()} icon={GraduationCap} color="text-blue-600"/>
         <StatCard label="Employed" value={stats?.totalEmployed?.toLocaleString()} icon={Briefcase} color="text-green-600"/>
@@ -112,6 +112,62 @@ export default function ReportsPage() {
         />
         <StatCard label="Active Programs" value={stats?.totalPrograms ?? programData.length} icon={Users} color="text-purple-600"/>
       </div>
+
+      {/* Student Stats — visible when data is present (career advisor + admin) */}
+      {stats?.totalStudents != null && (
+        <>
+          <div className="flex items-center gap-4 pt-1">
+            <div className="flex-1 border-t border-gray-200"/>
+            <h2 className="text-base font-bold text-gray-900 whitespace-nowrap">Student Overview</h2>
+            <div className="flex-1 border-t border-gray-200"/>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <StatCard
+              label="Total Students"
+              value={stats.totalStudents.toLocaleString()}
+              icon={Users}
+              color="text-indigo-600"
+              sub="Registered student accounts"
+            />
+            <StatCard
+              label="Programs with Students"
+              value={stats.studentsPerProgram?.length ?? "—"}
+              icon={GraduationCap}
+              color="text-purple-600"
+            />
+          </div>
+
+          {stats.studentsPerProgram?.length > 0 && (
+            <div className="card">
+              <h2 className="text-base font-semibold text-gray-900 mb-1">Students per Program</h2>
+              <p className="text-xs text-gray-400 mb-4">Number of registered students in each program</p>
+              <ResponsiveContainer width="100%" height={Math.max(220, stats.studentsPerProgram.length * 36)}>
+                <BarChart
+                  data={stats.studentsPerProgram}
+                  layout="vertical"
+                  margin={{ left: 0, right: 48, top: 4, bottom: 4 }}
+                >
+                  <XAxis type="number" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false}/>
+                  <YAxis
+                    type="category"
+                    dataKey="program"
+                    width={160}
+                    tick={{ fontSize: 10 }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v) => v.replace("BS ", "").replace("Bachelor of Science in ", "")}
+                  />
+                  <Tooltip formatter={(v) => [v, "Students"]}/>
+                  <Bar dataKey="count" fill="#6366f1" radius={[0, 4, 4, 0]} name="Students">
+                    <LabelList dataKey="count" position="right" style={{ fontSize: 11, fontWeight: 700, fill: "#374151" }}/>
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </>
+      )}
 
       {/* Employment Trends Line Chart */}
       {trends.length > 0 && (
