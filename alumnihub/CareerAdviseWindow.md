@@ -1,50 +1,55 @@
-# Career Advice Window (Dashboard Widget)
+# Career Advice Feature (Dedicated Page & Dashboard Widget)
 
 ## 1. Feature Overview
-The Career Advice Window is a dedicated notification and messaging interface located on the student's Dashboard. It serves as a direct line of communication between Students and Career Advisors. 
+The Career Advice feature provides a dedicated channel for students to receive structured guidance from their Career Advisor. This feature ensures that specific inputs from the advisor—specifically **Private Notes** and **Recommendations**—are automatically piped directly to the student. 
 
-When a Career Advisor sends advice, a message, or a reply to a student, the student will receive a real-time notification on their dashboard. They can read the advice and directly reply from this lightweight window without needing to navigate to the full Inbox page.
+To provide a better UX, this feature requires two integrated UI components for the student:
+1. **A Dedicated Career Advice Page** (Full view accessible via the sidebar).
+2. **A Career Advice Window/Widget** (Quick dropdown view/notifications on the dashboard).
 
-## 2. UI/UX Placement & Behavior
+## 2. Data Source (Advisor Interface)
+Based on the advisor's view of the student roster:
+- When a Career Advisor views a student profile, they see specific tabs including: **Career Timeline**, **Skills Progression**, **Private Notes**, and **Recommendations**.
+- **Action Trigger:** Whenever the Advisor creates a new "Private Note" or "Recommendation" via these tabs, the system will instantly push this data directly to the student's `Career Advice` view rather than keeping it strictly for internal advisor records.
+
+## 3. UI/UX Placement (Student Interface)
+
+### A. Dedicated Career Advice Page (Full View)
+- **Sidebar Menu:** A new navigation link added to the main left sidebar named "Career Advice" (e.g., with a clipboard or lightbulb icon).
+- **Page Layout:** This page serves as a long-form history log where the student can read all past and present guidance.
+  - Features dedicated sections or filterable tabs for **Recommendations** and **Private Notes**.
+  - Students can review their progression based on the advisor's notes here over time.
+
+### B. Career Advice Window (Dashboard Widget & Notifications)
 - **Location:** Inside the top navigation header on the Dashboard page, located at the far right beside the `Welcome, [Student Name]` greeting.
-- **Icon Trigger:** A distinctive icon (e.g., a Lightbulb, Briefcase, or a Chat Bubble) will serve as the toggle for the window.
-- **Notification Badge:** A visual indicator (such as a red dot with an unread count) will appear on the icon whenever the student receives new advice or a reply from an advisor.
-- **Window Interface:** A floating popover (dropdown panel) or a slide-out drawer that appears when the icon is clicked. 
+- **Behavior:** This acts as a notification center specifically for advice. When a new Note or Recommendation is added by the advisor:
+  1. A red notification dot appears on the icon.
+  2. Clicking the icon opens a floating popover (dropdown panel) showing a preview of the newest Note/Recommendation.
+  3. Clicking the preview inside the window will **redirect the student to the full Career Advice Page**.
 
-## 3. Frontend Component Structure
-To implement this feature in React, the following component structure should be created:
+## 4. Frontend Component Structure
+To implement this feature in React, construct the following:
 
-- `DashboardTopNav.jsx` / `Header.jsx`: The container holding the Welcome message and the new icon widget.
-- `CareerAdviceWidget.jsx`: The wrapper component handling the state (open/closed) and the realtime unread count.
-- `CareerAdviceWindow.jsx`: The dropdown modal/panel that opens.
-  - `AdviceThreadList.jsx`: Displays the conversational thread of advice/messages.
-  - `AdviceReplyInput.jsx`: A text box and "Send" button allowing the student to respond back to the advisor.
+- **Sidebar Integration:** Update `Sidebar.jsx` or `Layout.jsx` to include the `/career-advice` protected route.
+- **`CareerAdvicePage.jsx`:** The full-screen component displaying the feed of Recommendations and Notes.
+- **`DashboardTopNav.jsx`:** Includes the new widget icon.
+- **`CareerAdviceWidget.jsx`:** The popover dropdown showing the latest items and unread counts.
 
-## 4. Backend and Database Integration
-Since AlumniHub uses Express and Supabase, the following backend architecture is required:
+## 5. Backend and Database Integration
 
-### Database (Supabase)
-This feature seamlessly reuses the existing `messages` table but filters it specifically for interactions involving the "Career Advisor" role.
+### Database Adjustments (Supabase)
+Instead of modifying general messages, this requires a targeted data fetch:
+- If `private_notes` and `recommendations` are currently stored in their own tables (or as metadata on profiles), ensure they include a `student_id` and `advisor_id`.
+- Add an `is_read_by_student` boolean column to these tables to track the notification badge counts natively.
 
-### Realtime Notifications (Supabase Realtime)
-- The frontend will subscribe to the `messages` table, filtering for the current student's `id` as the receiver.
-- When an advisor sends a message, a realtime event triggers the frontend to increment the notification badge count instantly.
+### API Endpoints:
+- **`GET /api/advice/student/:id`**: Fetches the combined list of Recommendations and Private Notes for the specific student.
+- **`GET /api/advice/unread-count`**: Counts all Notes/Recommendations where `is_read_by_student = false`.
+- **`PATCH /api/advice/mark-read`**: Called when the student opens the Widget or visits the Page, clearing the red notification balloon.
 
-### Express API Endpoints Needed:
-- **`GET /api/messages/advice/unread`**: Fetches the total number of unread pieces of advice from advisors.
-- **`GET /api/messages/advice`**: Retrieves the context thread of messages specifically between the student and career advisors.
-- **`POST /api/messages/advice/reply`**: Allows the student to send a reply back to the advisor.
-
-## 5. Expected User Flows
-
-### Flow 1: Student Receives Advice
-1. A Career Advisor sends advice to the student via their system.
-2. Supabase Realtime pushes the event to the student's active browser session.
-3. The red notification badge increments beside `Welcome, [Name]` on the far right.
-4. The student clicks the icon to open the `CareerAdviceWindow`.
-5. The student reads the message, triggering an API call to mark the message as "read".
-
-### Flow 2: Student Replies to Advisor
-1. Inside the open `CareerAdviceWindow`, the student types a response into the input field and clicks "Send".
-2. The API inserts the new message into the database.
-3. The message is appended locally to the chat window, and the response is immediately routed to the Career Advisor's main inbox.
+## 6. Expected User Flow
+1. **Advisor inputs advice:** The Career Advisor navigates to "Steve Lawrence", clicks the "Recommendations" or "Private Notes" tab, and submits a new note.
+2. **Real-time push:** Supabase triggers a realtime event notifying the student's active session.
+3. **Student Widget updates:** A notification badge appears on the Dashboard widget (e.g., "1 Unread Recommendation").
+4. **Student checks widget:** The student clicks the widget, sees a preview of the recommendation, and clicks on it.
+5. **Student visits Page:** The system routes them to the new **Career Advice Page**, clearing the notification, where they can read the full recommendation context.
