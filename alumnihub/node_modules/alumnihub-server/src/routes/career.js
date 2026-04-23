@@ -122,6 +122,24 @@ router.delete("/milestones/:id", authenticate, async (req, res, next) => {
   }
 });
 
+// ── AI Diagnostic (public, no auth) ──
+router.get("/test-ai", async (req, res) => {
+  const keySet = !!process.env.GEMINI_API_KEY;
+  if (!keySet) {
+    return res.json({ ok: false, step: "env", error: "GEMINI_API_KEY is not set" });
+  }
+  try {
+    const { GoogleGenerativeAI } = require("@google/generative-ai");
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const result = await model.generateContent('Reply with exactly: {"ok":true}');
+    const text = result.response.text().trim();
+    res.json({ ok: true, step: "gemini", response: text });
+  } catch (err) {
+    res.json({ ok: false, step: "gemini", error: err.message });
+  }
+});
+
 // ══════════════════════════════════════════
 // CV UPLOAD & AI PARSING
 // ══════════════════════════════════════════
