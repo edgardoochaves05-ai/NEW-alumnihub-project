@@ -5,32 +5,70 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const pdfParse = require("pdf-parse/lib/pdf-parse.js");
 const mammoth  = require("mammoth");
 
-// Scan a PDF buffer for the first embedded JPEG image larger than 5 KB.
-// Profile photos in CVs are almost always stored as DCT-compressed JPEG streams.
-function extractFirstJpegFromPDF(buffer) {
+// Scan a PDF buffer for embedded images (JPEG and PNG).
+// Returns { data: Buffer, mime: string } for the largest candidate found, or null.
+function extractProfileImageFromPDF(buffer) {
+  const candidates = [];
+
+  // ── JPEG: SOI = FF D8 FF, EOI = FF D9 ──
   let i = 0;
   while (i < buffer.length - 3) {
-    // JPEG SOI marker: FF D8 FF
     if (buffer[i] === 0xFF && buffer[i + 1] === 0xD8 && buffer[i + 2] === 0xFF) {
       const start = i;
       let j = start + 4;
+      let found = false;
       while (j < buffer.length - 1) {
-        // JPEG EOI marker: FF D9
         if (buffer[j] === 0xFF && buffer[j + 1] === 0xD9) {
-          const end = j + 2;
-          const img = buffer.slice(start, end);
-          // Skip tiny images (icons, bullets) — profile photos are typically > 5 KB
-          if (img.length > 5000) return img;
-          i = end;
+          const size = j + 2 - start;
+          if (size > 2000) candidates.push({ start, end: j + 2, size, mime: "image/jpeg" });
+          i = j + 2;
+          found = true;
           break;
         }
         j++;
       }
-      if (j >= buffer.length - 1) break;
+      if (!found) break;
+    } else {
+      i++;
     }
-    i++;
   }
-  return null;
+
+  // ── PNG: signature 89 50 4E 47 0D 0A 1A 0A, ends with IEND chunk AE 42 60 82 ──
+  const PNG_SIG = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+  const IEND    = [0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82];
+  i = 0;
+  while (i < buffer.length - 8) {
+    if (PNG_SIG.every((b, k) => buffer[i + k] === b)) {
+      const start = i;
+      let j = start + 8;
+      let found = false;
+      while (j < buffer.length - 8) {
+        if (IEND.every((b, k) => buffer[j + k] === b)) {
+          const size = j + 8 - start;
+          if (size > 2000) candidates.push({ start, end: j + 8, size, mime: "image/png" });
+          i = j + 8;
+          found = true;
+          break;
+        }
+        j++;
+      }
+      if (!found) break;
+    } else {
+      i++;
+    }
+  }
+
+  if (candidates.length === 0) {
+    console.log("[Avatar] No embedded images found in PDF");
+    return null;
+  }
+
+  console.log(`[Avatar] Found ${candidates.length} image(s):`, candidates.map(c => `${c.mime} ${c.size}B`));
+
+  // Use the largest image — profile photos are bigger than icons/logos
+  const best = candidates.reduce((a, b) => (b.size > a.size ? b : a));
+  console.log(`[Avatar] Selected: ${best.mime} ${best.size}B`);
+  return { data: buffer.slice(best.start, best.end), mime: best.mime };
 }
 
 async function extractTextFromBuffer(buffer, mimeType) {
@@ -260,12 +298,13 @@ router.post("/upload-cv", authenticate, async (req, res, next) => {
     // ── Extract & upload profile photo from PDF (best-effort) ──
     if (mimeType === "application/pdf") {
       try {
-        const jpegBuffer = extractFirstJpegFromPDF(fileBuffer);
-        if (jpegBuffer) {
-          const avatarPath = `avatars/${req.user.id}/${Date.now()}_avatar.jpg`;
+        const imageResult = extractProfileImageFromPDF(fileBuffer);
+        if (imageResult) {
+          const ext = imageResult.mime === "image/png" ? "png" : "jpg";
+          const avatarPath = `avatars/${req.user.id}/${Date.now()}_avatar.${ext}`;
           const { error: avatarUploadError } = await supabase.storage
             .from("cv-uploads")
-            .upload(avatarPath, jpegBuffer, { contentType: "image/jpeg", upsert: true });
+            .upload(avatarPath, imageResult.data, { contentType: imageResult.mime, upsert: true });
           if (!avatarUploadError) {
             const { data: avatarUrlData } = supabase.storage
               .from("cv-uploads")
