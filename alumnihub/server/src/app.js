@@ -39,8 +39,21 @@ console.log("✓ Supabase configured:", isSupabaseConfigured());
 
 // ── Middleware ──
 app.use(helmet());
+const allowedOrigins = (process.env.CLIENT_URL || "http://localhost:5173")
+  .split(",")
+  .map(o => o.trim())
+  .filter(Boolean);
+
 app.use(cors({
-  origin: process.env.CLIENT_URL || "http://localhost:5173",
+  origin: (origin, callback) => {
+    // Allow server-to-server requests (no origin header)
+    if (!origin) return callback(null, true);
+    // Allow exact matches from CLIENT_URL env var
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    // Allow any Vercel preview/production deployment URL
+    if (origin.endsWith(".vercel.app")) return callback(null, true);
+    callback(new Error(`CORS: origin ${origin} not allowed`));
+  },
   credentials: true,
 }));
 app.use(morgan("dev"));

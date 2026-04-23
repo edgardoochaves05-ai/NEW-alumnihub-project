@@ -487,9 +487,11 @@ export default function JobsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Job Listings</h1>
           <p className="text-sm text-gray-500 mt-1">Browse opportunities and post openings for the alumni network.</p>
         </div>
-        <button onClick={() => setShowPost(true)} className="btn-primary flex items-center gap-2 text-sm">
-          <Plus size={15}/> Post a Job
-        </button>
+        {profile?.role !== "student" && (
+          <button onClick={() => setShowPost(true)} className="btn-primary flex items-center gap-2 text-sm">
+            <Plus size={15}/> Post a Job
+          </button>
+        )}
       </div>
 
       {/* Top 10 Chart — alumni only, uses stable top10Jobs */}
