@@ -116,13 +116,14 @@ export default function CareerAdvicePage() {
   useEffect(() => {
     if (!user) return;
 
-    Promise.all([
-      api.get("/advice"),
-      api.patch("/advice/mark-read"),
-    ])
-      .then(([{ data }]) => setAllItems(Array.isArray(data) ? data : []))
+    api.get("/advice")
+      .then(({ data }) => setAllItems(Array.isArray(data) ? data : []))
       .catch(() => setAllItems([]))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        // Mark read independently so a failure here never blocks the page render
+        api.patch("/advice/mark-read").catch(() => {});
+      });
   }, [user]);
 
   // Realtime: prepend new items live
