@@ -5,8 +5,6 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const pdfParse = require("pdf-parse");
 const mammoth  = require("mammoth");
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
 async function extractTextFromBuffer(buffer, mimeType) {
   if (mimeType === "application/pdf") {
     const data = await pdfParse(buffer);
@@ -20,6 +18,7 @@ async function extractTextFromBuffer(buffer, mimeType) {
 }
 
 async function parseWithAI(rawText) {
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
   const truncated = rawText.slice(0, 12000);
 
