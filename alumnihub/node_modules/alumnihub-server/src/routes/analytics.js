@@ -22,7 +22,7 @@ router.use((req, res, next) => {
 });
 
 // ── Dashboard Stats (Career Advisor/Admin) ──
-router.get("/dashboard", authenticate, authorize("admin"), async (req, res, next) => {
+router.get("/dashboard", authenticate, authorize("admin", "career_advisor"), async (req, res, next) => {
   try {
     console.log("[ANALYTICS] GET /dashboard - user:", req.user?.id, "role:", req.profile?.role);
     const stats = await getOverallStats();

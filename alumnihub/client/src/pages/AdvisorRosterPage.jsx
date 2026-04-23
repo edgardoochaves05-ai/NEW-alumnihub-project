@@ -8,8 +8,8 @@ import {
 
 const EMP_STATUS_OPTIONS = [
   { value: "",         label: "All Students" },
-  { value: "employed", label: "Currently Employed" },
-  { value: "seeking",  label: "Seeking Jobs" },
+  { value: "employed", label: "Current Interns" },
+  { value: "seeking",  label: "Seeking Internships" },
 ];
 
 function StatCard({ label, value, icon: Icon, color }) {
@@ -27,14 +27,14 @@ function StatCard({ label, value, icon: Icon, color }) {
 }
 
 function EmploymentBadge({ student }) {
-  const employed = student.current_company && student.current_company.trim() !== "";
-  return employed ? (
+  const isIntern = student.current_company && student.current_company.trim() !== "";
+  return isIntern ? (
     <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
-      <UserCheck size={10}/>Employed
+      <UserCheck size={10}/>Current Intern
     </span>
   ) : (
     <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">
-      <Clock size={10}/>Seeking
+      <Clock size={10}/>Seeking Internship
     </span>
   );
 }
@@ -134,7 +134,7 @@ export default function AdvisorRosterPage() {
   const programs    = useMemo(() => [...new Set(students.map(s => s.program).filter(Boolean))].sort(), [students]);
   const departments = useMemo(() => [...new Set(students.map(s => s.department).filter(Boolean))].sort(), [students]);
 
-  const employed = students.filter(s => s.current_company?.trim()).length;
+  const interns  = students.filter(s => s.current_company?.trim()).length;
   const seeking  = students.filter(s => !s.current_company?.trim()).length;
 
   const activeFilters = [program, department, empStatus].filter(Boolean).length;
@@ -149,9 +149,9 @@ export default function AdvisorRosterPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard label="Total Assigned"    value={total}    icon={Users}    color="bg-blue-600"/>
-        <StatCard label="Currently Employed" value={employed} icon={UserCheck} color="bg-green-600"/>
-        <StatCard label="Seeking Jobs"       value={seeking}  icon={Clock}     color="bg-amber-500"/>
+        <StatCard label="Total Assigned"       value={total}   icon={Users}    color="bg-blue-600"/>
+        <StatCard label="Current Interns"      value={interns} icon={UserCheck} color="bg-green-600"/>
+        <StatCard label="Seeking Internships"  value={seeking} icon={Clock}     color="bg-amber-500"/>
       </div>
 
       {/* Search + Filter */}

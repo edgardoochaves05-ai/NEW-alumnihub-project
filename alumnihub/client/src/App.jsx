@@ -77,11 +77,11 @@ function AppRoutes() {
           }
         />
 
-        {/* Student Directory — Admin only */}
+        {/* Student Directory — Admin + Career Advisor */}
         <Route
           path="students"
           element={
-            <ProtectedRoute allowedRoles={["admin"]}>
+            <ProtectedRoute allowedRoles={["admin", "career_advisor"]}>
               <StudentDirectoryPage />
             </ProtectedRoute>
           }
@@ -159,21 +159,21 @@ function AppRoutes() {
           }
         />
 
-        {/* Reports — Admin only */}
+        {/* Reports — Admin + Career Advisor */}
         <Route
           path="reports"
           element={
-            <ProtectedRoute allowedRoles={["admin"]}>
+            <ProtectedRoute allowedRoles={["admin", "career_advisor"]}>
               <ReportsPage />
             </ProtectedRoute>
           }
         />
 
-        {/* Curriculum Impact — Admin only */}
+        {/* Curriculum Impact — Admin + Career Advisor */}
         <Route
           path="curriculum-impact"
           element={
-            <ProtectedRoute allowedRoles={["admin"]}>
+            <ProtectedRoute allowedRoles={["admin", "career_advisor"]}>
               <CurriculumImpactPage />
             </ProtectedRoute>
           }
