@@ -655,8 +655,9 @@ export default function ProfilePage() {
               const extracted = data.parsedData.profile;
               const FIELD_LABELS = {
                 first_name: "First Name", last_name: "Last Name", phone: "Phone",
-                city: "City", current_job_title: "Job Title", current_company: "Company",
-                industry: "Industry", linkedin_url: "LinkedIn URL", bio: "Bio",
+                address: "Address", city: "City", current_job_title: "Job Title",
+                current_company: "Company", industry: "Industry",
+                linkedin_url: "LinkedIn URL", bio: "Bio",
               };
               // Compute filled list outside setForm to avoid React Strict Mode double-push
               const filled = Object.entries(FIELD_LABELS)

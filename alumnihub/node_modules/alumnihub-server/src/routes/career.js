@@ -26,7 +26,7 @@ async function parseWithAI(rawText) {
   const prompt = `You are a career data extraction assistant. Analyze the CV text below and return ONLY a valid JSON object — no markdown, no explanation.
 
 The JSON must have exactly these keys:
-- "profile": object with any of: first_name, last_name, phone, city, current_job_title, current_company, industry, linkedin_url, bio (only include fields clearly stated)
+- "profile": object with any of: first_name, last_name, phone, address, city, current_job_title, current_company, industry, linkedin_url, bio (only include fields clearly stated)
 - "milestones": array of milestone objects
 - "skills": flat string array of all skills mentioned
 
