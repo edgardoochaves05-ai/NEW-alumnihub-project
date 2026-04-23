@@ -10,7 +10,9 @@ import {
   Users, Briefcase, TrendingUp,
   Mail, Bell, ChevronRight, Award, BookOpen,
   ArrowUpRight, Loader2, Plus, X, Eye, Send,
+  Sparkles, ChevronDown, ChevronUp,
 } from "lucide-react";
+import JobMatchAnalytics from "../components/JobMatchAnalytics";
 import { formatDistanceToNow } from "date-fns";
 
 // ── Category config ─────────────────────────────────────────────
@@ -182,6 +184,7 @@ function AlumniDashboard({ profile }) {
   const [recentJobs, setRecentJobs] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [expandedMatch, setExpandedMatch] = useState(null);
 
   useEffect(() => {
     Promise.all([
@@ -320,34 +323,80 @@ function AlumniDashboard({ profile }) {
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="font-semibold text-gray-900">AI Job Matches</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Ranked by compatibility with your profile</p>
-            </div>
-            <Link to="/jobs" className="text-sm text-blue-600 hover:underline">View all</Link>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {data.topMatches.map(({ match_score, job_listings: job }) => (
-              <div key={job.id} className="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
-                    {Math.round(match_score)}% match
-                  </span>
-                </div>
-                <p className="text-sm font-medium text-gray-900 truncate">{job.title}</p>
-                <p className="text-xs text-gray-500 truncate">{job.company}</p>
+              <div className="flex items-center gap-2 mb-0.5">
+                <Sparkles size={15} className="text-blue-600"/>
+                <h2 className="font-semibold text-gray-900">AI Job Matches</h2>
               </div>
-            ))}
+              <p className="text-xs text-gray-500">
+                Ranked by compatibility with your profile · click a card to see why
+              </p>
+            </div>
+            <Link to="/jobs" className="text-sm text-blue-600 hover:underline flex items-center gap-1">
+              View all <ChevronRight size={14}/>
+            </Link>
           </div>
+
+          {/* ── Clickable match cards ── */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {data.topMatches.map(({ match_score, job_listings: job }) => {
+              const pct = Math.round(match_score > 1 ? match_score : match_score * 100);
+              const isExpanded = expandedMatch === job.id;
+              const scoreBadge =
+                pct >= 75 ? "text-green-700 bg-green-50 border-green-200" :
+                pct >= 50 ? "text-blue-700 bg-blue-50 border-blue-200"   :
+                "text-gray-600 bg-gray-50 border-gray-200";
+              const cardBorder = isExpanded
+                ? "border-blue-400 bg-blue-50/30 shadow-sm"
+                : "border-gray-200 hover:border-blue-300 hover:bg-gray-50/50";
+              return (
+                <button
+                  key={job.id}
+                  onClick={() => setExpandedMatch(isExpanded ? null : job.id)}
+                  className={`text-left p-3.5 border rounded-xl transition-all ${cardBorder}`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full border ${scoreBadge}`}>
+                      <Sparkles size={9}/>{pct}% match
+                    </span>
+                    {isExpanded
+                      ? <ChevronUp size={13} className="text-blue-500 flex-shrink-0"/>
+                      : <ChevronDown size={13} className="text-gray-400 flex-shrink-0"/>}
+                  </div>
+                  <p className="text-sm font-semibold text-gray-900 truncate">{job.title}</p>
+                  <p className="text-xs text-gray-500 truncate">{job.company}</p>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* ── Expanded analytics panel ── */}
+          {expandedMatch && (() => {
+            const match = data.topMatches.find(m => m.job_listings.id === expandedMatch);
+            if (!match) return null;
+            return (
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  {match.job_listings.title} · {match.job_listings.company}
+                </p>
+                <JobMatchAnalytics
+                  job={match.job_listings}
+                  profile={profile}
+                  matchScore={match.match_score}
+                  mode="full"
+                />
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>
   );
 }
 
-// ── Faculty / Admin Dashboard ──────────────────────────────────
+// ── Admin Dashboard ──────────────────────────────────
 const CHART_COLORS = ["#2563eb", "#16a34a", "#9333ea", "#d97706", "#dc2626"];
 
-function FacultyAdminDashboard({ profile }) {
+function AdminDashboard({ profile }) {
   const [stats, setStats] = useState(null);
   const [trends, setTrends] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
@@ -649,6 +698,80 @@ function FacultyAdminDashboard({ profile }) {
   );
 }
 
+// ── Career Advisor Dashboard ───────────────────────────────────
+function CareerAdvisorDashboard({ profile }) {
+  const [totalStudents, setTotalStudents] = useState(0);
+  const [totalPrograms, setTotalPrograms] = useState(0);
+  const [announcements, setAnnouncements] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      api.get("/profiles/students?limit=1"),
+      api.get("/analytics/programs"),
+      api.get("/announcements?limit=5"),
+    ])
+      .then(([studentsRes, programsRes, annRes]) => {
+        setTotalStudents(studentsRes.data?.total || 0);
+        setTotalPrograms(programsRes.data?.length || 0);
+        
+        const annList = Array.isArray(annRes.data) ? annRes.data : (annRes.data?.announcements || []);
+        setAnnouncements(Array.isArray(annList) ? annList : []);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 size={28} className="animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Career Advisor Dashboard</h1>
+        <p className="text-gray-500 mt-1 text-sm">
+          Welcome, {profile?.first_name || "Advisor"}! Here's an overview of your students.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <StatCard icon={Users} label="Total Students" value={totalStudents} color="blue" to="/students" />
+        <StatCard icon={BookOpen} label="Active Programs" value={totalPrograms} color="green" />
+      </div>
+
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold text-gray-900">Announcements</h2>
+          <Bell size={16} className="text-gray-400" />
+        </div>
+        {announcements.length === 0 ? (
+          <p className="text-gray-400 text-sm text-center py-6">No announcements yet.</p>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {announcements.map((a) => (
+              <div key={a.id} className="py-3">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <p className="text-sm font-medium text-gray-900">{a.title}</p>
+                  <CategoryBadge category={a.category} />
+                </div>
+                <p className="text-xs text-gray-500 line-clamp-2">{a.content}</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Student Dashboard (Announcements only) ─────────────────────
 function StudentDashboard({ profile }) {
   const [announcements, setAnnouncements] = useState([]);
@@ -710,7 +833,7 @@ function StudentDashboard({ profile }) {
 
 // ── Main Export ────────────────────────────────────────────────
 export default function DashboardPage() {
-  const { profile, loading, isAlumni, isFaculty, isAdmin } = useAuth();
+  const { profile, loading, isAlumni, isAdmin, isCareerAdvisor } = useAuth();
 
   if (loading || !profile) {
     return (
@@ -722,7 +845,8 @@ export default function DashboardPage() {
 
   if (profile.role === "student") return <StudentDashboard profile={profile} />;
   if (isAlumni) return <AlumniDashboard profile={profile} />;
-  if (isFaculty || isAdmin) return <FacultyAdminDashboard profile={profile} />;
+  if (isAdmin) return <AdminDashboard profile={profile} />;
+  if (isCareerAdvisor) return <CareerAdvisorDashboard profile={profile} />;
 
   // Unknown role — show alumni view as safe default
   return <AlumniDashboard profile={profile} />;
