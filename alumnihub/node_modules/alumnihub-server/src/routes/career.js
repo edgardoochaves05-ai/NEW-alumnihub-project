@@ -5,6 +5,34 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const pdfParse = require("pdf-parse/lib/pdf-parse.js");
 const mammoth  = require("mammoth");
 
+// Scan a PDF buffer for the first embedded JPEG image larger than 5 KB.
+// Profile photos in CVs are almost always stored as DCT-compressed JPEG streams.
+function extractFirstJpegFromPDF(buffer) {
+  let i = 0;
+  while (i < buffer.length - 3) {
+    // JPEG SOI marker: FF D8 FF
+    if (buffer[i] === 0xFF && buffer[i + 1] === 0xD8 && buffer[i + 2] === 0xFF) {
+      const start = i;
+      let j = start + 4;
+      while (j < buffer.length - 1) {
+        // JPEG EOI marker: FF D9
+        if (buffer[j] === 0xFF && buffer[j + 1] === 0xD9) {
+          const end = j + 2;
+          const img = buffer.slice(start, end);
+          // Skip tiny images (icons, bullets) — profile photos are typically > 5 KB
+          if (img.length > 5000) return img;
+          i = end;
+          break;
+        }
+        j++;
+      }
+      if (j >= buffer.length - 1) break;
+    }
+    i++;
+  }
+  return null;
+}
+
 async function extractTextFromBuffer(buffer, mimeType) {
   if (mimeType === "application/pdf") {
     const data = await pdfParse(buffer);
@@ -226,7 +254,31 @@ router.post("/upload-cv", authenticate, async (req, res, next) => {
     } catch (aiError) {
       console.error("[CV Parse] AI extraction failed:", aiError.message);
       console.error("[CV Parse] Stack:", aiError.stack);
-      newStatus = aiError.message; // temporarily store reason for debugging
+      newStatus = aiError.message;
+    }
+
+    // ── Extract & upload profile photo from PDF (best-effort) ──
+    if (mimeType === "application/pdf") {
+      try {
+        const jpegBuffer = extractFirstJpegFromPDF(fileBuffer);
+        if (jpegBuffer) {
+          const avatarPath = `avatars/${req.user.id}/${Date.now()}_avatar.jpg`;
+          const { error: avatarUploadError } = await supabase.storage
+            .from("cv-uploads")
+            .upload(avatarPath, jpegBuffer, { contentType: "image/jpeg", upsert: true });
+          if (!avatarUploadError) {
+            const { data: avatarUrlData } = supabase.storage
+              .from("cv-uploads")
+              .getPublicUrl(avatarPath);
+            if (parsedData) {
+              parsedData.profile = parsedData.profile || {};
+              parsedData.profile.avatar_url = avatarUrlData.publicUrl;
+            }
+          }
+        }
+      } catch (imgError) {
+        console.error("[CV Parse] Avatar extraction failed:", imgError.message);
+      }
     }
 
     const finalStatus = newStatus === "parsed" ? "parsed" : "failed";

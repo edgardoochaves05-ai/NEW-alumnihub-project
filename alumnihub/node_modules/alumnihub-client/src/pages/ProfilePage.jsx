@@ -664,6 +664,7 @@ export default function ProfilePage() {
                 .filter(([field]) => extracted[field] && String(extracted[field]).trim())
                 .map(([, label]) => label);
               if (data.parsedData.skills?.length) filled.push("Skills");
+              if (extracted.avatar_url) filled.push("Profile Photo");
 
               setForm((prev) => {
                 const updated = { ...prev };
@@ -672,11 +673,14 @@ export default function ProfilePage() {
                     updated[field] = extracted[field];
                   }
                 }
+                if (extracted.avatar_url) updated.avatar_url = extracted.avatar_url;
                 if (data.parsedData.skills?.length) {
                   updated.skills = [...new Set([...(prev.skills || []), ...data.parsedData.skills])];
                 }
                 return updated;
               });
+              // Show the extracted avatar as a preview immediately
+              if (extracted.avatar_url) setAvatarPreview(extracted.avatar_url);
               setFilledFields(filled);
               setEditing(true);
             }
