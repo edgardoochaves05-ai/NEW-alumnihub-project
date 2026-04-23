@@ -18,6 +18,7 @@ async function extractTextFromBuffer(buffer, mimeType) {
 }
 
 async function parseWithAI(rawText) {
+  if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not set in environment variables.");
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
   const truncated = rawText.slice(0, 12000);
