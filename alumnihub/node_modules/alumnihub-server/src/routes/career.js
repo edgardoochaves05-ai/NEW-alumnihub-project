@@ -20,7 +20,7 @@ async function extractTextFromBuffer(buffer, mimeType) {
 async function parseWithAI(rawText) {
   if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not set in environment variables.");
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
   const truncated = rawText.slice(0, 12000);
 
   const prompt = `You are a career data extraction assistant. Analyze the CV text below and return ONLY a valid JSON object — no markdown, no explanation.
