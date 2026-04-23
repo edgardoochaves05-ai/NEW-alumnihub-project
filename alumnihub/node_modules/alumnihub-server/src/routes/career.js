@@ -2,7 +2,7 @@ const { Router } = require("express");
 const { authenticate } = require("../middleware/auth.js");
 const { supabase } = require("../config/supabase.js");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
-const pdfParse = require("pdf-parse");
+const pdfParse = require("pdf-parse/lib/pdf-parse.js");
 const mammoth  = require("mammoth");
 
 async function extractTextFromBuffer(buffer, mimeType) {
@@ -189,7 +189,11 @@ router.post("/upload-cv", authenticate, async (req, res, next) => {
       newStatus = "parsed";
     } catch (aiError) {
       console.error("[CV Parse] AI extraction failed:", aiError.message);
+      console.error("[CV Parse] Stack:", aiError.stack);
+      newStatus = aiError.message; // temporarily store reason for debugging
     }
+
+    const finalStatus = newStatus === "parsed" ? "parsed" : "failed";
 
     await supabase
       .from("cv_parsed_data")
@@ -197,18 +201,18 @@ router.post("/upload-cv", authenticate, async (req, res, next) => {
         raw_text:          rawText || null,
         parsed_milestones: parsedData?.milestones || [],
         parsed_skills:     parsedData?.skills     || [],
-        status:            newStatus,
+        status:            finalStatus,
       })
       .eq("id", parsedRecord.id);
 
     res.status(201).json({
-      message: newStatus === "parsed"
+      message: finalStatus === "parsed"
         ? "CV uploaded and parsed successfully."
-        : "CV uploaded but AI parsing failed. You can add milestones manually.",
+        : `CV uploaded but AI parsing failed: ${newStatus}`,
       cvUrl,
       parsedRecordId: parsedRecord.id,
       parsedData:     parsedData || null,
-      status:         newStatus,
+      status:         finalStatus,
     });
   } catch (err) {
     next(err);
