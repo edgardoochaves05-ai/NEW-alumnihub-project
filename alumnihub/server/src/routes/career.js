@@ -283,18 +283,26 @@ router.post("/cv-parsed/:id/confirm", authenticate, async (req, res, next) => {
       return res.status(400).json({ error: "Milestones array is required" });
     }
 
+    // Normalize a date value to YYYY-MM-DD (Postgres DATE requires full date)
+    const toDate = (val) => {
+      if (!val) return null;
+      if (/^\d{4}-\d{2}$/.test(val)) return `${val}-01`;   // YYYY-MM → YYYY-MM-01
+      if (/^\d{4}$/.test(val)) return `${val}-01-01`;       // YYYY → YYYY-01-01
+      return val;
+    };
+
     // Insert confirmed milestones into career_milestones
     const milestonesWithProfile = milestones.map((m) => ({
       profile_id: req.user.id,
       title: m.title,
-      company: m.company,
-      industry: m.industry,
-      description: m.description,
+      company: m.company || null,
+      industry: m.industry || null,
+      description: m.description || null,
       milestone_type: m.milestone_type || "job",
-      start_date: m.start_date,
-      end_date: m.end_date,
+      start_date: toDate(m.start_date),
+      end_date: toDate(m.end_date),
       is_current: m.is_current || false,
-      location: m.location,
+      location: m.location || null,
       skills_used: m.skills_used || [],
     }));
 
