@@ -11,7 +11,7 @@ The React.js single-page application handles all user-facing interactions. It co
 
 **Students can:** Update their own profile, browse jobs, send/receive messages, manage message requests, and browse announcements. Cannot view the Alumni Directory or Student Directory.
 
-**Career Advisors can:** View their assigned students via the Advisor Roster, access individual student career paths, create notes and recommendations per student, browse announcements, and send/receive messages. Career advisor messages always go directly to Inbox (never routed to Message Requests). Career advisors always see full profiles regardless of privacy settings.
+**Career Advisors can:** View their assigned students via the Advisor Roster, access individual student career paths, view the general Student Directory, access analytics (Reports and Curriculum Impact), create notes and recommendations per student, browse announcements, and send/receive messages. Career advisor messages always go directly to Inbox (never routed to Message Requests). Career advisors always see full profiles regardless of privacy settings.
 
 **Admins can:** View the Alumni Directory and Student Directory, manage advisor–student assignments via Advisor Management, access analytics (Reports, Curriculum Impact), manage job listings, manage announcements, and handle feedback. Admin always sees full profiles regardless of privacy settings. Admin does NOT have a personal profile or inbox.
 
@@ -53,7 +53,7 @@ The `AuthContext` exposes computed booleans: `isAlumni`, `isCareerAdvisor` (true
 | `/profile` | ✓ | ✓ | — | — |
 | `/profile/:id` | ✓ | ✓ | ✓ | ✓ |
 | `/alumni` (Alumni Directory) | — | — | — | ✓ |
-| `/students` (Student Directory) | — | — | — | ✓ |
+| `/students` (Student Directory) | — | — | ✓ | ✓ |
 | `/jobs` | ✓ | ✓ | ✓ | ✓ |
 | `/messages` | ✓ | ✓ | ✓ | ✓ |
 | `/settings` | ✓ | ✓ | ✓ | ✓ |
@@ -61,8 +61,8 @@ The `AuthContext` exposes computed booleans: `isAlumni`, `isCareerAdvisor` (true
 | `/advisor/roster` | — | — | ✓ | — |
 | `/advisor/student/:id` | — | — | ✓ | — |
 | `/advisor-management` | — | — | — | ✓ |
-| `/reports` | — | — | — | ✓ |
-| `/curriculum-impact` | — | — | — | ✓ |
+| `/reports` | — | — | ✓ | ✓ |
+| `/curriculum-impact` | — | — | ✓ | ✓ |
 
 ## Data Flow
 

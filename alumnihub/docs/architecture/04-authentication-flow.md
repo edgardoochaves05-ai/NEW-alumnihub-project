@@ -64,7 +64,7 @@ Frontend routing enforces the same rules via the `ProtectedRoute` component in [
 
 ```jsx
 <Route path="reports" element={
-  <ProtectedRoute allowedRoles={["admin"]}>
+  <ProtectedRoute allowedRoles={["admin", "career_advisor"]}>
     <ReportsPage />
   </ProtectedRoute>
 } />
