@@ -23,7 +23,8 @@ import AdvisorManagementPage from "./pages/AdvisorManagementPage";
 // Redirect career_advisor from /dashboard → their roster
 function DashboardRoute() {
   const { profile } = useAuth();
-  if (profile?.role === "career_advisor") return <Navigate to="/advisor/roster" replace />;
+  const effectiveRole = profile?.role === "faculty" ? "career_advisor" : profile?.role;
+  if (effectiveRole === "career_advisor") return <Navigate to="/advisor/roster" replace />;
   return <DashboardPage />;
 }
 
@@ -33,7 +34,8 @@ function ProtectedRoute({ children, allowedRoles }) {
 
   if (loading) return <div className="flex items-center justify-center h-screen">Loading...</div>;
   if (!user) return <Navigate to="/login" />;
-  if (allowedRoles && !allowedRoles.includes(profile?.role)) {
+  const effectiveRole = profile?.role === "faculty" ? "career_advisor" : profile?.role;
+  if (allowedRoles && !allowedRoles.includes(effectiveRole)) {
     return <Navigate to="/dashboard" />;
   }
 

@@ -31,8 +31,9 @@ export default function Layout() {
     navigate("/login");
   };
 
+  const effectiveRole = profile?.role === "faculty" ? "career_advisor" : profile?.role;
   const filteredNav = navItems.filter((item) =>
-    item.roles.includes(profile?.role)
+    item.roles.includes(effectiveRole)
   );
 
   return (

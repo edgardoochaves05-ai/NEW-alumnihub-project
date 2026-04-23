@@ -5,7 +5,7 @@ const { supabase } = require("../config/supabase.js");
 const router = Router();
 
 // ── Roster: assigned students with filters ─────────────────────────────────
-router.get("/roster", authenticate, authorize("career_advisor", "admin"), async (req, res, next) => {
+router.get("/roster", authenticate, authorize("career_advisor", "faculty", "admin"), async (req, res, next) => {
   try {
     const { search, program, department, employment_status, page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
@@ -58,7 +58,7 @@ router.get("/list", authenticate, authorize("admin"), async (req, res, next) => 
     const { data, error } = await supabase
       .from("profiles")
       .select("id, first_name, last_name, email, avatar_url, department")
-      .eq("role", "career_advisor")
+      .eq("role", "faculty")
       .eq("is_active", true)
       .order("last_name");
     if (error) throw error;
@@ -129,7 +129,7 @@ router.get("/search-users", authenticate, authorize("admin"), async (req, res, n
 });
 
 // ── Notes: get for a student (advisor's own notes only) ───────────────────
-router.get("/notes/:studentId", authenticate, authorize("career_advisor"), async (req, res, next) => {
+router.get("/notes/:studentId", authenticate, authorize("career_advisor", "faculty"), async (req, res, next) => {
   try {
     const { data, error } = await supabase
       .from("advisor_notes")
@@ -143,7 +143,7 @@ router.get("/notes/:studentId", authenticate, authorize("career_advisor"), async
 });
 
 // ── Notes: create ──────────────────────────────────────────────────────────
-router.post("/notes", authenticate, authorize("career_advisor"), async (req, res, next) => {
+router.post("/notes", authenticate, authorize("career_advisor", "faculty"), async (req, res, next) => {
   try {
     const { student_id, content } = req.body;
     if (!student_id || !content?.trim()) {
@@ -160,7 +160,7 @@ router.post("/notes", authenticate, authorize("career_advisor"), async (req, res
 });
 
 // ── Notes: update ──────────────────────────────────────────────────────────
-router.put("/notes/:id", authenticate, authorize("career_advisor"), async (req, res, next) => {
+router.put("/notes/:id", authenticate, authorize("career_advisor", "faculty"), async (req, res, next) => {
   try {
     const { content } = req.body;
     if (!content?.trim()) return res.status(400).json({ error: "Content is required" });
@@ -178,7 +178,7 @@ router.put("/notes/:id", authenticate, authorize("career_advisor"), async (req, 
 });
 
 // ── Notes: delete ──────────────────────────────────────────────────────────
-router.delete("/notes/:id", authenticate, authorize("career_advisor"), async (req, res, next) => {
+router.delete("/notes/:id", authenticate, authorize("career_advisor", "faculty"), async (req, res, next) => {
   try {
     const { error } = await supabase
       .from("advisor_notes")
@@ -191,7 +191,7 @@ router.delete("/notes/:id", authenticate, authorize("career_advisor"), async (re
 });
 
 // ── Recommendations: get for a student ────────────────────────────────────
-router.get("/recommendations/:studentId", authenticate, authorize("career_advisor"), async (req, res, next) => {
+router.get("/recommendations/:studentId", authenticate, authorize("career_advisor", "faculty"), async (req, res, next) => {
   try {
     const { data, error } = await supabase
       .from("advisor_recommendations")
@@ -205,7 +205,7 @@ router.get("/recommendations/:studentId", authenticate, authorize("career_adviso
 });
 
 // ── Recommendations: create ────────────────────────────────────────────────
-router.post("/recommendations", authenticate, authorize("career_advisor"), async (req, res, next) => {
+router.post("/recommendations", authenticate, authorize("career_advisor", "faculty"), async (req, res, next) => {
   try {
     const { student_id, type, title, description, url } = req.body;
     if (!student_id || !title?.trim()) {
@@ -222,7 +222,7 @@ router.post("/recommendations", authenticate, authorize("career_advisor"), async
 });
 
 // ── Recommendations: delete ────────────────────────────────────────────────
-router.delete("/recommendations/:id", authenticate, authorize("career_advisor"), async (req, res, next) => {
+router.delete("/recommendations/:id", authenticate, authorize("career_advisor", "faculty"), async (req, res, next) => {
   try {
     const { error } = await supabase
       .from("advisor_recommendations")
