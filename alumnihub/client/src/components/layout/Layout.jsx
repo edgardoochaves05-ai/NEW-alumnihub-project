@@ -3,7 +3,7 @@ import { useAuth } from "../../context/AuthContext";
 import {
   LayoutDashboard, User, Users, Briefcase, Mail,
   BarChart3, Settings, LogOut, TrendingUp, GraduationCap, BookOpen,
-  ClipboardList, UserCog,
+  UserCog, Lightbulb,
 } from "lucide-react";
 
 const navItems = [
@@ -14,6 +14,7 @@ const navItems = [
   { to: "/jobs",                icon: Briefcase,       label: "Jobs",                 roles: ["alumni", "student", "admin"] },
   { to: "/messages",            icon: Mail,            label: "Inbox",                roles: ["alumni", "student", "admin", "career_advisor"] },
   { to: "/career-prediction",   icon: TrendingUp,      label: "Career Prediction",    roles: ["alumni"] },
+  { to: "/career-advice",       icon: Lightbulb,       label: "Career Advice",        roles: ["student"] },
   { to: "/reports",             icon: BarChart3,       label: "Reports",              roles: ["admin", "career_advisor"] },
   { to: "/curriculum-impact",   icon: GraduationCap,   label: "Curriculum Impact",    roles: ["admin", "career_advisor"] },
   { to: "/advisor-management",  icon: UserCog,         label: "Advisor Management",   roles: ["admin"] },

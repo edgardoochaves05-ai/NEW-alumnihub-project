@@ -19,6 +19,7 @@ const feedbackRoutes = require("./routes/feedback.js");
 const messageRequestRoutes = require("./routes/messageRequests.js");
 const announcementRoutes = require("./routes/announcements.js");
 const advisorRoutes = require("./routes/advisor.js");
+const adviceRoutes = require("./routes/advice.js");
 
 console.log("[APP] All routes imported successfully");
 
@@ -98,6 +99,7 @@ app.use("/api/feedback", feedbackRoutes);
 app.use("/api/message-requests", messageRequestRoutes);
 app.use("/api/announcements", announcementRoutes);
 app.use("/api/advisor", advisorRoutes);
+app.use("/api/advice", adviceRoutes);
 
 console.log("[APP] Routes registered");
 

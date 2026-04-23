@@ -18,6 +18,7 @@ import SettingsPage from "./pages/SettingsPage";
 import AdvisorRosterPage from "./pages/AdvisorRosterPage";
 import StudentCareerPathPage from "./pages/StudentCareerPathPage";
 import AdvisorManagementPage from "./pages/AdvisorManagementPage";
+import CareerAdvicePage from "./pages/CareerAdvicePage";
 
 // Redirect career_advisor from /dashboard → their roster
 function DashboardRoute() {
@@ -144,6 +145,16 @@ function AppRoutes() {
           element={
             <ProtectedRoute allowedRoles={["alumni"]}>
               <CareerPredictionPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Career Advice — Student only */}
+        <Route
+          path="career-advice"
+          element={
+            <ProtectedRoute allowedRoles={["student"]}>
+              <CareerAdvicePage />
             </ProtectedRoute>
           }
         />
