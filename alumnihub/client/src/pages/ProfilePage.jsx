@@ -355,6 +355,13 @@ export default function ProfilePage() {
   const [uploadMsg, setUploadMsg] = useState("");
   const [showResume, setShowResume] = useState(false);
 
+  // AI CV Parsing review
+  const [parsedRecord, setParsedRecord]             = useState(null);
+  const [reviewMilestones, setReviewMilestones]     = useState([]);
+  const [selectedMilestones, setSelectedMilestones] = useState(new Set());
+  const [confirmingCV, setConfirmingCV]             = useState(false);
+  const [confirmCVMsg, setConfirmCVMsg]             = useState("");
+
   useEffect(() => {
     loadProfile();
   }, [profileId]);
@@ -617,26 +624,107 @@ export default function ProfilePage() {
       setUploadMsg("Only PDF or DOCX files are accepted.");
       return;
     }
-    setUploading(true); setUploadMsg("");
+    setUploading(true);
+    setUploadMsg("");
+    setParsedRecord(null);
+    setReviewMilestones([]);
+    setSelectedMilestones(new Set());
+    setConfirmCVMsg("");
+
     try {
       const reader = new FileReader();
       reader.onload = async (ev) => {
-        const base64 = ev.target.result.split(",")[1];
-        await api.post("/career/upload-cv", {
-          fileBase64: base64,
-          fileName: file.name,
-          mimeType: file.type,
-        });
-        setUploadMsg("CV uploaded! AI is processing your milestones.");
-        setUploading(false);
-        loadProfile();
+        try {
+          const base64 = ev.target.result.split(",")[1];
+          const { data } = await api.post("/career/upload-cv", {
+            fileBase64: base64,
+            fileName: file.name,
+            mimeType: file.type,
+          });
+
+          if (data.status === "parsed" && data.parsedData) {
+            const milestones = data.parsedData.milestones || [];
+
+            if (data.parsedData.profile) {
+              const extracted = data.parsedData.profile;
+              setForm((prev) => {
+                const updated = { ...prev };
+                const fillable = ["first_name", "last_name", "phone", "city", "current_job_title", "current_company", "industry", "linkedin_url", "bio"];
+                for (const field of fillable) {
+                  if (extracted[field] && (!prev[field] || String(prev[field]).trim() === "")) {
+                    updated[field] = extracted[field];
+                  }
+                }
+                if (data.parsedData.skills?.length) {
+                  updated.skills = [...new Set([...(prev.skills || []), ...data.parsedData.skills])];
+                }
+                return updated;
+              });
+              setEditing(true);
+            }
+
+            if (milestones.length > 0) {
+              setParsedRecord({ id: data.parsedRecordId });
+              setReviewMilestones(milestones);
+              setSelectedMilestones(new Set(milestones.map((_, i) => i)));
+              setUploadMsg("CV parsed! Review the extracted milestones below before confirming.");
+            } else {
+              setUploadMsg("CV parsed! Profile fields have been filled in — review and save.");
+            }
+          } else {
+            setUploadMsg(
+              data.status === "failed"
+                ? "CV uploaded but AI parsing failed. You can add milestones manually."
+                : "CV uploaded. No milestones were detected."
+            );
+          }
+
+          setUploading(false);
+          loadProfile();
+        } catch (innerErr) {
+          const errorMsg = innerErr.response?.data?.error || "Upload failed.";
+          setUploadMsg(typeof errorMsg === "string" ? errorMsg : "Upload failed.");
+          setUploading(false);
+        }
       };
       reader.readAsDataURL(file);
     } catch (err) {
       const errorMsg = err.response?.data?.error || "Upload failed.";
-      setUploadMsg(typeof errorMsg === 'string' ? errorMsg : errorMsg.message || "Upload failed.");
+      setUploadMsg(typeof errorMsg === "string" ? errorMsg : "Upload failed.");
       setUploading(false);
     }
+  }
+
+  async function handleConfirmCV() {
+    if (!parsedRecord?.id) return;
+    setConfirmingCV(true);
+    setConfirmCVMsg("");
+    try {
+      const toConfirm = reviewMilestones.filter((_, i) => selectedMilestones.has(i));
+      const { data } = await api.post(`/career/cv-parsed/${parsedRecord.id}/confirm`, {
+        milestones: toConfirm,
+      });
+      setConfirmCVMsg(`${data.milestones.length} milestone${data.milestones.length !== 1 ? "s" : ""} added to your profile.`);
+      setMilestones((prev) =>
+        [...data.milestones, ...prev].sort((a, b) => new Date(b.start_date || 0) - new Date(a.start_date || 0))
+      );
+      setParsedRecord(null);
+      setReviewMilestones([]);
+      setSelectedMilestones(new Set());
+    } catch (err) {
+      const errorMsg = err.response?.data?.error || "Failed to confirm milestones.";
+      setConfirmCVMsg(typeof errorMsg === "string" ? errorMsg : "Failed to confirm milestones.");
+    } finally {
+      setConfirmingCV(false);
+    }
+  }
+
+  function handleToggleMilestone(index) {
+    setSelectedMilestones((prev) => {
+      const next = new Set(prev);
+      next.has(index) ? next.delete(index) : next.add(index);
+      return next;
+    });
   }
 
   // ── Render ──────────────────────────────────────────────────────
@@ -945,6 +1033,114 @@ export default function ProfilePage() {
               {uploadMsg}
             </p>
           )}
+
+          {/* ── AI Milestone Review Panel ── */}
+          {reviewMilestones.length > 0 && parsedRecord && (
+            <div className="mt-5 border border-blue-200 rounded-xl bg-blue-50 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <CheckCircle size={16} className="text-blue-600" />
+                  <h3 className="text-sm font-semibold text-blue-900">
+                    AI Extracted {reviewMilestones.length} Milestone{reviewMilestones.length !== 1 ? "s" : ""}
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-blue-700">
+                  <button onClick={() => setSelectedMilestones(new Set(reviewMilestones.map((_, i) => i)))} className="hover:underline">
+                    Select all
+                  </button>
+                  <span>·</span>
+                  <button onClick={() => setSelectedMilestones(new Set())} className="hover:underline">
+                    Deselect all
+                  </button>
+                </div>
+              </div>
+
+              <p className="text-xs text-blue-700 mb-3">
+                Review the milestones below. Uncheck any you don't want to add, then click Confirm.
+              </p>
+
+              <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                {reviewMilestones.map((m, i) => {
+                  const cfg = MILESTONE_COLORS[m.milestone_type] || MILESTONE_COLORS.other;
+                  const Icon = cfg.icon;
+                  const isSelected = selectedMilestones.has(i);
+                  return (
+                    <label
+                      key={i}
+                      className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                        isSelected ? "bg-white border-blue-300 shadow-sm" : "bg-blue-50/50 border-transparent opacity-60"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleToggleMilestone(i)}
+                        className="mt-0.5 w-4 h-4 rounded accent-blue-600 flex-shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${cfg.bg} ${cfg.text}`}>
+                            <Icon size={10} /> {m.milestone_type}
+                          </span>
+                          <span className="text-sm font-semibold text-gray-900 truncate">{m.title}</span>
+                        </div>
+                        {m.company && (
+                          <p className="text-xs text-gray-600 mt-0.5">
+                            {m.company}{m.location ? ` · ${m.location}` : ""}
+                          </p>
+                        )}
+                        {(m.start_date || m.end_date) && (
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {m.start_date || "?"} – {m.is_current ? "Present" : m.end_date || "?"}
+                          </p>
+                        )}
+                        {m.description && (
+                          <p className="text-xs text-gray-500 mt-1 leading-relaxed line-clamp-2">{m.description}</p>
+                        )}
+                        {m.skills_used?.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {m.skills_used.slice(0, 5).map((s) => (
+                              <span key={s} className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">{s}</span>
+                            ))}
+                            {m.skills_used.length > 5 && (
+                              <span className="text-xs text-gray-400">+{m.skills_used.length - 5} more</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div className="flex items-center justify-between mt-4 pt-3 border-t border-blue-200">
+                <p className="text-xs text-blue-700">{selectedMilestones.size} of {reviewMilestones.length} selected</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setParsedRecord(null); setReviewMilestones([]); setSelectedMilestones(new Set()); setConfirmCVMsg(""); }}
+                    className="btn-secondary text-sm py-1.5 px-3"
+                  >
+                    Dismiss
+                  </button>
+                  <button
+                    onClick={handleConfirmCV}
+                    disabled={confirmingCV || selectedMilestones.size === 0}
+                    className="btn-primary text-sm py-1.5 px-3 flex items-center gap-2"
+                  >
+                    {confirmingCV && <Loader2 size={13} className="animate-spin" />}
+                    Confirm {selectedMilestones.size > 0 ? `(${selectedMilestones.size})` : ""}
+                  </button>
+                </div>
+              </div>
+
+              {confirmCVMsg && (
+                <p className={`mt-2 text-xs ${confirmCVMsg.includes("Failed") ? "text-red-600" : "text-green-700"}`}>
+                  {confirmCVMsg}
+                </p>
+              )}
+            </div>
+          )}
+
           <p className="mt-2 text-xs text-gray-400">Accepted formats: PDF, DOCX. Max 10MB.</p>
         </div>
       )}

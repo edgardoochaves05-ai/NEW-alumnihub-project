@@ -1,6 +1,57 @@
 const { Router } = require("express");
 const { authenticate } = require("../middleware/auth.js");
 const { supabase } = require("../config/supabase.js");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const pdfParse = require("pdf-parse");
+const mammoth  = require("mammoth");
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+async function extractTextFromBuffer(buffer, mimeType) {
+  if (mimeType === "application/pdf") {
+    const data = await pdfParse(buffer);
+    return data.text;
+  }
+  if (mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+    const result = await mammoth.extractRawText({ buffer });
+    return result.value;
+  }
+  throw new Error("Unsupported file type.");
+}
+
+async function parseWithAI(rawText) {
+  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+  const truncated = rawText.slice(0, 12000);
+
+  const prompt = `You are a career data extraction assistant. Analyze the CV text below and return ONLY a valid JSON object — no markdown, no explanation.
+
+The JSON must have exactly these keys:
+- "profile": object with any of: first_name, last_name, phone, city, current_job_title, current_company, industry, linkedin_url, bio (only include fields clearly stated)
+- "milestones": array of milestone objects
+- "skills": flat string array of all skills mentioned
+
+Each milestone object must have:
+- title (string, required)
+- company (string or null)
+- industry (one of: "Information Technology","Telecommunications","Finance & Banking","Healthcare","Education","Government","Manufacturing","Retail & E-commerce","Business Process Outsourcing (BPO)","Engineering","Media & Entertainment","Real Estate","Other", or null)
+- start_date (YYYY-MM string or null)
+- end_date (YYYY-MM string or null if current)
+- is_current (boolean)
+- location (string or null)
+- description (1-2 sentence summary)
+- skills_used (string array)
+- milestone_type (one of: "job","promotion","certification","award","education","other")
+
+Rules: Only include profile fields clearly stated in the CV. Do not guess. Return empty arrays/objects if nothing found.
+
+CV Text:
+${truncated}`;
+
+  const result = await model.generateContent(prompt);
+  const raw = result.response.text().trim();
+  const cleaned = raw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+  return JSON.parse(cleaned);
+}
 
 const router = Router();
 
@@ -128,22 +179,36 @@ router.post("/upload-cv", authenticate, async (req, res, next) => {
 
     if (parseError) throw parseError;
 
-    // TODO: Trigger actual AI parsing here
-    // In production, this would call an AI service (e.g., Anthropic API)
-    // to extract career milestones from the CV text.
-    // For now, we simulate by setting status to "parsed" with placeholder data.
-    //
-    // The flow is:
-    // 1. Extract text from PDF/DOCX (using pdf-parse or mammoth)
-    // 2. Send extracted text to AI API for structured extraction
-    // 3. Store parsed milestones in cv_parsed_data.parsed_milestones
-    // 4. User reviews and confirms on the frontend
-    // 5. Confirmed milestones get inserted into career_milestones table
+    let rawText = "";
+    let parsedData = null;
+    let newStatus = "failed";
+
+    try {
+      rawText = await extractTextFromBuffer(fileBuffer, mimeType);
+      parsedData = await parseWithAI(rawText);
+      newStatus = "parsed";
+    } catch (aiError) {
+      console.error("[CV Parse] AI extraction failed:", aiError.message);
+    }
+
+    await supabase
+      .from("cv_parsed_data")
+      .update({
+        raw_text:          rawText || null,
+        parsed_milestones: parsedData?.milestones || [],
+        parsed_skills:     parsedData?.skills     || [],
+        status:            newStatus,
+      })
+      .eq("id", parsedRecord.id);
 
     res.status(201).json({
-      message: "CV uploaded successfully. AI is processing your career milestones.",
+      message: newStatus === "parsed"
+        ? "CV uploaded and parsed successfully."
+        : "CV uploaded but AI parsing failed. You can add milestones manually.",
       cvUrl,
       parsedRecordId: parsedRecord.id,
+      parsedData:     parsedData || null,
+      status:         newStatus,
     });
   } catch (err) {
     next(err);
