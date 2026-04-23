@@ -50,7 +50,7 @@ async function main() {
     password: ADVISOR_PASSWORD,
     email_confirm: true,
     user_metadata: {
-      role: "faculty", // Advisors function as faculty level accounts
+      role: "career_advisor", // Advisors function as career_advisor level accounts
       first_name: "Carla",
       last_name: "Reyes (Advisor)",
     },
@@ -74,14 +74,14 @@ async function main() {
   const advisorUser = users.find((u) => u.email === ADVISOR_EMAIL);
   if (!advisorUser) { console.error("Advisor user not found after creation."); process.exit(1); }
 
-  // 3. Upsert the profiles row with role = 'faculty'
+  // 3. Upsert the profiles row with role = 'career_advisor'
   const { error: profileErr } = await supabase
     .from("profiles")
     .upsert(
       {
         id: advisorUser.id,
         email: ADVISOR_EMAIL,
-        role: "faculty",
+        role: "career_advisor",
         first_name: "Carla",
         last_name: "Reyes (Advisor)",
       },
@@ -97,7 +97,7 @@ async function main() {
   console.log("─────────────────────────────");
   console.log("  Email   :", ADVISOR_EMAIL);
   console.log("  Password:", ADVISOR_PASSWORD);
-  console.log("  Role    : faculty (acts as advisor)");
+  console.log("  Role    : career_advisor");
   console.log("─────────────────────────────");
   console.log("Log in at http://localhost:5173/login");
 }

@@ -15,7 +15,6 @@ import ReportsPage from "./pages/ReportsPage";
 import CareerPredictionPage from "./pages/CareerPredictionPage";
 import CurriculumImpactPage from "./pages/CurriculumImpactPage";
 import SettingsPage from "./pages/SettingsPage";
-import FacultyDirectoryPage from "./pages/FacultyDirectoryPage";
 import AdvisorRosterPage from "./pages/AdvisorRosterPage";
 import StudentCareerPathPage from "./pages/StudentCareerPathPage";
 import AdvisorManagementPage from "./pages/AdvisorManagementPage";
@@ -87,15 +86,6 @@ function AppRoutes() {
           }
         />
 
-        {/* Faculty Directory — Admin only */}
-        <Route
-          path="faculty-directory"
-          element={
-            <ProtectedRoute allowedRoles={["admin"]}>
-              <FacultyDirectoryPage />
-            </ProtectedRoute>
-          }
-        />
 
         {/* Jobs — all roles */}
         <Route path="jobs" element={<JobsPage />} />

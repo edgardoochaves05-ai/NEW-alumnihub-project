@@ -62,7 +62,7 @@ function UserSearchInput({ placeholder, onSelect, roleFilter, disabled }) {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-gray-900 truncate">{u.first_name} {u.last_name}</p>
-                <p className="text-xs text-gray-400 truncate">{u.email} · <span className="capitalize">{u.role === 'faculty' ? 'career advisor' : u.role}</span></p>
+                <p className="text-xs text-gray-400 truncate">{u.email} · <span className="capitalize">{u.role === 'career_advisor' ? 'career advisor' : u.role}</span></p>
               </div>
             </button>
           ))}
@@ -84,9 +84,7 @@ function AssignRoleModal({ onClose, onSuccess }) {
     setSaving(true);
     setError("");
     try {
-      // Send 'faculty' to the backend to satisfy the database check constraint
-      // but the UI will treat and display it as 'Career Advisor'.
-      await api.patch(`/profiles/${selectedUser.id}/role`, { role: "faculty" });
+      await api.patch(`/profiles/${selectedUser.id}/role`, { role: "career_advisor" });
       onSuccess(selectedUser);
     } catch (err) {
       setError(err.response?.data?.error || "Failed to assign role.");
@@ -216,6 +214,19 @@ export default function AdvisorManagementPage() {
     } catch (e) { console.error(e); }
   }
 
+  async function removeAdvisorAssignments(id) {
+    if (!window.confirm("Are you sure you want to remove all students assigned to this career advisor?")) return;
+    try {
+      await api.delete(`/advisor/assignments/advisor/${id}`);
+      // Re-fetch assignments to reflect deletions
+      const { data: asgn } = await api.get("/advisor/assignments");
+      setAssignments(asgn || []);
+    } catch (e) { 
+      console.error(e); 
+      alert(e.response?.data?.error || "Failed to remove assignments."); 
+    }
+  }
+
   function onRoleAssigned(user) {
     setAdvisors(prev => [...prev, { id: user.id, first_name: user.first_name, last_name: user.last_name, email: user.email }]);
     setRoleModal(false);
@@ -271,9 +282,19 @@ export default function AdvisorManagementPage() {
                       <p className="text-sm font-medium text-gray-900">{a.first_name} {a.last_name}</p>
                       <p className="text-xs text-gray-400">{a.email}{a.department ? ` · ${a.department}` : ""}</p>
                     </div>
-                    <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
-                      {assignments.filter(x => x.advisor?.id === a.id).length} student{assignments.filter(x => x.advisor?.id === a.id).length !== 1 ? "s" : ""}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
+                        {assignments.filter(x => x.advisor?.id === a.id).length} student{assignments.filter(x => x.advisor?.id === a.id).length !== 1 ? "s" : ""}
+                      </span>
+                      <button
+                        onClick={() => removeAdvisorAssignments(a.id)}
+                        className="text-gray-400 hover:text-red-500 transition-colors"
+                        title="Remove all assignments"
+                        disabled={assignments.filter(x => x.advisor?.id === a.id).length === 0}
+                      >
+                        <Trash2 size={16}/>
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

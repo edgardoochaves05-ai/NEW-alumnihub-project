@@ -12,7 +12,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- Extends Supabase auth.users with app-specific data
 CREATE TABLE profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    role VARCHAR(20) NOT NULL DEFAULT 'alumni' CHECK (role IN ('alumni', 'faculty', 'admin', 'student')),
+    role VARCHAR(20) NOT NULL DEFAULT 'alumni' CHECK (role IN ('alumni', 'career_advisor', 'admin', 'student')),
     first_name VARCHAR(100),
     last_name VARCHAR(100),
     email VARCHAR(255) NOT NULL,
@@ -282,7 +282,7 @@ CREATE TABLE announcements (
     content TEXT NOT NULL,
     is_published BOOLEAN DEFAULT TRUE,
     target_audience VARCHAR(20) DEFAULT 'all' CHECK (
-        target_audience IN ('all', 'alumni', 'faculty')
+        target_audience IN ('all', 'alumni', 'career_advisor')
     ),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()

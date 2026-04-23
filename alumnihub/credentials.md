@@ -14,7 +14,7 @@
 - Username: qelochaves@tip.edu.ph
 - Password: kurt1234
 
-### Alumni Account 2 (Dummy)
+### Alumni Account 2
 - Username: maria.santos@alumnihub.com
 - Password: Alumni@Hub2026!
 
@@ -24,7 +24,7 @@
 - Username: edgardo.ochaves05@gmail.com
 - Password: student123
 
-### Student Account 2 (Dummy)
+### Student Account 2
 - Username: juan.delacruz@alumnihub.com
 - Password: Student@Hub2026!
 

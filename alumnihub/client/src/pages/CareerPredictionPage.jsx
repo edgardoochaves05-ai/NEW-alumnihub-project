@@ -115,7 +115,7 @@ export default function CareerPredictionPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Career Prediction</h1>
           <p className="text-sm text-gray-500 mt-1">
-            AI-powered career trajectory analysis based on peer alumni data.
+            AI-powered career trajectory analysis based on your profile, CV, and peer alumni data.
           </p>
         </div>
         <button onClick={fetchPredictions} disabled={loading}

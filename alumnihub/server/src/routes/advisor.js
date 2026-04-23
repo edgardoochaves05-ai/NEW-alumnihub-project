@@ -107,6 +107,18 @@ router.delete("/assignments/:id", authenticate, authorize("admin"), async (req, 
   } catch (err) { next(err); }
 });
 
+// ── Delete all assignments for an advisor (admin) ──────────────────────────
+router.delete("/assignments/advisor/:advisorId", authenticate, authorize("admin"), async (req, res, next) => {
+  try {
+    const { error } = await supabase
+      .from("advisor_assignments")
+      .delete()
+      .eq("advisor_id", req.params.advisorId);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err) { next(err); }
+});
+
 // ── Search users for admin assignment modals ───────────────────────────────
 router.get("/search-users", authenticate, authorize("admin"), async (req, res, next) => {
   try {

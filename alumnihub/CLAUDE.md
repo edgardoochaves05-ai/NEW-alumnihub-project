@@ -33,7 +33,7 @@ npm run dev:server   # Backend only
 | Role | Access |
 |------|--------|
 | **alumni** | Profile (with CV upload), jobs, inbox, message requests, career prediction, settings. CANNOT see Alumni Directory. |
-| **faculty** | Profile, alumni directory, jobs, inbox, reports, curriculum impact, career prediction, settings. |
+| **career_advisor** | Profile, alumni directory, jobs, inbox, reports, curriculum impact, career prediction, settings. |
 | **admin** | Alumni directory, jobs, inbox, reports, curriculum impact, settings. CANNOT see My Profile (admin is not an alumni). |
 
 ## Key Business Rules
@@ -41,7 +41,7 @@ npm run dev:server   # Backend only
 ### Privacy System
 - Alumni can set their profile to **private** (`is_private = true` in profiles table)
 - Private profiles are hidden from other alumni in search/directory
-- Faculty/Admin can always see all profiles
+- Career Advisor/Admin can always see all profiles
 - To message a private user, you must send a **message request** first
 - The private user can **accept** or **decline** the request
 - Accepting auto-creates a conversation; declining blocks the sender
@@ -71,7 +71,7 @@ npm run dev:server   # Backend only
 ### AI Features
 1. **Career Path Prediction** — Analyzes peer alumni milestones to predict career trajectories
 2. **Smart Job Matching** — Multi-factor scoring: skills (40%), industry (25%), experience (20%), program (15%)
-3. **Curriculum Impact Analytics** — Faculty-only: employment rates, top industries, progression scores per program
+3. **Curriculum Impact Analytics** — Career Advisor only: employment rates, top industries, progression scores per program
 
 ## Database Tables
 profiles, career_milestones, job_listings, job_match_scores, career_predictions, curriculum_impact, conversations, conversation_participants, messages, message_requests, cv_parsed_data, feedback, announcements
@@ -144,11 +144,11 @@ The project is scaffolded with route stubs. The following pages need full UI imp
 1. LoginPage & RegisterPage — Forms with Supabase Auth
 2. DashboardPage — Stats cards + recent announcements + charts
 3. ProfilePage — Personal info form + CV upload + AI-parsed milestones review
-4. AlumniListPage — Table with search/filter (faculty/admin only)
+4. AlumniListPage — Table with search/filter (career_advisor/admin only)
 5. JobsPage — Job cards with search bar + filters + AI match scores
 6. MessagesPage — Conversation list (with search/filter) + chat view
 7. MessageRequestsPage — Incoming requests with accept/decline
-8. ReportsPage — Analytics dashboard with Recharts (faculty/admin)
+8. ReportsPage — Analytics dashboard with Recharts (career_advisor/admin)
 9. CareerPredictionPage — Prediction results with trajectory visualization
-10. CurriculumImpactPage — Program analytics with charts (faculty/admin)
+10. CurriculumImpactPage — Program analytics with charts (career_advisor/admin)
 11. SettingsPage — Privacy toggle, account settings

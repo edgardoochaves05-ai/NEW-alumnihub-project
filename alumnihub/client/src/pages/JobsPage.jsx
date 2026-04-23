@@ -10,7 +10,9 @@ import {
   Search, Filter, Briefcase, Building2, MapPin, Clock, Plus, X,
   ChevronLeft, ChevronRight, Loader2, Sparkles, ExternalLink,
   BookmarkPlus, Calendar, GraduationCap, User, Mail,
+  ChevronDown, ChevronUp,
 } from "lucide-react";
+import JobMatchAnalytics from "../components/JobMatchAnalytics";
 
 const INDUSTRIES = ["Technology","Finance","Healthcare","Education","Engineering","Business","Government","Non-profit","Other"];
 const JOB_TYPES  = ["full-time","part-time","contract","internship","remote"];
@@ -23,6 +25,7 @@ function normalizeScore(score) {
   const raw = score > 1 ? score : score * 100;
   return Math.min(100, Math.round(raw));
 }
+
 
 function MatchBadge({ score }) {
   if (!score) return null;
@@ -116,35 +119,68 @@ function Top10MatchChart({ jobs, matchMap, onJobClick }) {
 }
 
 // ── Job Card ───────────────────────────────────────────────────
-function JobCard({ job, onClick }) {
+function JobCard({ job, matchScore, profile, onClick }) {
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const hasAnalytics = profile?.role === "alumni" && !!matchScore;
+  const overallPct   = normalizeScore(matchScore);
+
+  const overallBadgeCls =
+    overallPct >= 75 ? "bg-green-100 text-green-700 border-green-200" :
+    overallPct >= 50 ? "bg-blue-100 text-blue-700 border-blue-200"   :
+    "bg-gray-100 text-gray-500 border-gray-200";
+
   return (
-    <div
-      onClick={() => onClick(job)}
-      className="card cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all flex flex-col gap-1.5"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-gray-900 text-sm leading-snug mb-1">{job.title}</h3>
-          <div className="flex items-center gap-1 text-xs text-gray-600">
-            <Building2 size={12}/><span className="font-medium">{job.company}</span>
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all flex flex-col">
+      {/* ── Main card body ── */}
+      <div onClick={() => onClick(job)} className="flex flex-col gap-1.5 p-5 cursor-pointer flex-1">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-gray-900 text-sm leading-snug mb-1">{job.title}</h3>
+            <div className="flex items-center gap-1 text-xs text-gray-600">
+              <Building2 size={12}/><span className="font-medium">{job.company}</span>
+            </div>
+            {job.location && (
+              <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
+                <MapPin size={11}/>{job.location}
+              </div>
+            )}
           </div>
-          {job.location && (
-            <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
-              <MapPin size={11}/>{job.location}
+          <div className="flex flex-col items-end gap-2 flex-shrink-0">
+            <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+              <Briefcase size={18} className="text-blue-600"/>
+            </div>
+            {hasAnalytics && (
+              <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${overallBadgeCls}`}>
+                <Sparkles size={9}/>{overallPct}%
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Analytics accordion — alumni only ── */}
+      {hasAnalytics && (
+        <div className="border-t border-gray-100">
+          <button
+            onClick={e => { e.stopPropagation(); setShowAnalytics(v => !v); }}
+            className="w-full flex items-center justify-between px-5 py-2.5 text-xs font-semibold text-blue-600 hover:bg-blue-50/70 transition-colors"
+          >
+            <span className="flex items-center gap-1.5"><Sparkles size={11}/>View Match Details</span>
+            {showAnalytics ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
+          </button>
+          {showAnalytics && (
+            <div onClick={e => e.stopPropagation()}>
+              <JobMatchAnalytics job={job} profile={profile} matchScore={matchScore} mode="compact"/>
             </div>
           )}
         </div>
-        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
-          <Briefcase size={18} className="text-blue-600"/>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
 
 // ── Job Detail Modal ───────────────────────────────────────────
-function JobDetailModal({ job, matchScore, onClose }) {
-  // Fire a unique view event whenever this modal opens for a different job
+function JobDetailModal({ job, matchScore, profile, onClose }) {
   useEffect(() => {
     if (job?.id) api.post(`/jobs/${job.id}/view`).catch(() => {});
   }, [job?.id]);
@@ -154,9 +190,13 @@ function JobDetailModal({ job, matchScore, onClose }) {
   };
 
   if (!job) return null;
+
+  const showAnalytics = profile?.role === "alumni" && !!matchScore;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        {/* ── Header ── */}
         <div className="flex items-start justify-between p-6 border-b border-gray-100">
           <div>
             <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -169,16 +209,16 @@ function JobDetailModal({ job, matchScore, onClose }) {
         </div>
 
         <div className="p-6 space-y-5">
-          {/* Meta */}
+          {/* ── Meta chips ── */}
           <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-            {job.location        && <span className="flex items-center gap-1.5"><MapPin size={14}/>{job.location}</span>}
-            {job.job_type        && <span className="flex items-center gap-1.5"><Clock size={14}/>{job.job_type}</span>}
-            {job.industry        && <span className="flex items-center gap-1.5"><Briefcase size={14}/>{job.industry}</span>}
+            {job.location         && <span className="flex items-center gap-1.5"><MapPin size={14}/>{job.location}</span>}
+            {job.job_type         && <span className="flex items-center gap-1.5"><Clock size={14}/>{job.job_type}</span>}
+            {job.industry         && <span className="flex items-center gap-1.5"><Briefcase size={14}/>{job.industry}</span>}
             {job.experience_level && <span className="flex items-center gap-1.5"><GraduationCap size={14}/>{job.experience_level} level</span>}
-            {job.expires_at      && <span className="flex items-center gap-1.5"><Calendar size={14}/>Deadline: {new Date(job.expires_at).toLocaleDateString()}</span>}
+            {job.expires_at       && <span className="flex items-center gap-1.5"><Calendar size={14}/>Deadline: {new Date(job.expires_at).toLocaleDateString()}</span>}
           </div>
 
-          {/* Salary */}
+          {/* ── Salary ── */}
           {(job.salary_min || job.salary_max) && (
             <p className="text-sm font-semibold text-green-700">
               Salary: ₱ {job.salary_min ? Number(job.salary_min).toLocaleString() : "?"}
@@ -186,7 +226,12 @@ function JobDetailModal({ job, matchScore, onClose }) {
             </p>
           )}
 
-          {/* Description */}
+          {/* ── AI Match Analytics panel (alumni only) ── */}
+          {showAnalytics && (
+            <JobMatchAnalytics job={job} profile={profile} matchScore={matchScore} mode="full"/>
+          )}
+
+          {/* ── Description ── */}
           {job.description && (
             <div>
               <h4 className="text-sm font-semibold text-gray-800 mb-2">Description</h4>
@@ -194,7 +239,7 @@ function JobDetailModal({ job, matchScore, onClose }) {
             </div>
           )}
 
-          {/* Requirements */}
+          {/* ── Requirements ── */}
           {job.requirements && (
             <div>
               <h4 className="text-sm font-semibold text-gray-800 mb-2">Requirements</h4>
@@ -202,7 +247,7 @@ function JobDetailModal({ job, matchScore, onClose }) {
             </div>
           )}
 
-          {/* Posted by */}
+          {/* ── Posted by ── */}
           {job.profiles && (
             <div className="flex items-center justify-between pt-3 mt-1 border-t border-gray-100">
               <div className="flex items-center gap-3">
@@ -224,7 +269,6 @@ function JobDetailModal({ job, matchScore, onClose }) {
                   </div>
                 </div>
               </div>
-              
               <Link to={`/profile/${job.posted_by}`} onClick={onClose}
                 className="btn-secondary inline-flex items-center gap-1.5 text-xs py-1.5 px-3">
                 <User size={13}/> View Profile
@@ -232,7 +276,7 @@ function JobDetailModal({ job, matchScore, onClose }) {
             </div>
           )}
 
-          {/* Action buttons */}
+          {/* ── Apply buttons ── */}
           {(job.application_url || job.application_email) && (
             <div className="flex flex-wrap gap-3 pt-2 border-t border-gray-100">
               {job.application_url && (
@@ -547,7 +591,7 @@ export default function JobsPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {displayedJobs.map(job => (
-              <JobCard key={job.id} job={job} onClick={setSelectedJob}/>
+              <JobCard key={job.id} job={job} matchScore={matchMap[job.id]} profile={profile} onClick={setSelectedJob}/>
             ))}
           </div>
         );
@@ -567,7 +611,7 @@ export default function JobsPage() {
       )}
 
       {selectedJob && (
-        <JobDetailModal job={selectedJob} matchScore={matchMap[selectedJob.id]} onClose={() => setSelectedJob(null)}/>
+        <JobDetailModal job={selectedJob} matchScore={matchMap[selectedJob.id]} profile={profile} onClose={() => setSelectedJob(null)}/>
       )}
       {showPost && (
         <PostJobModal onClose={() => setShowPost(false)} onCreated={newJob => { setJobs(prev => [newJob, ...prev]); setShowPost(false); }}/>

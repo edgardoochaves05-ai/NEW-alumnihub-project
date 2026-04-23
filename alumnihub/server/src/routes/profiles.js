@@ -38,7 +38,7 @@ router.put("/me", authenticate, async (req, res, next) => {
 
     // Server-side required field validation
     const { data: currentProfile } = await supabase
-      .from("profiles").select("role").eq("id", req.user.id).single();
+      .from("profiles").select("*").eq("id", req.user.id).single();
 
     const role = currentProfile?.role || req.profile?.role;
     const REQUIRED_PERSONAL = ["first_name", "last_name", "phone", "date_of_birth", "gender", "city", "address"];
@@ -49,7 +49,7 @@ router.put("/me", authenticate, async (req, res, next) => {
     ];
 
     const missing = requiredFields.filter(f => {
-      const val = updates[f];
+      const val = updates[f] !== undefined ? updates[f] : currentProfile?.[f];
       return val === undefined || val === null || val.toString().trim() === "";
     });
 
@@ -75,7 +75,7 @@ router.put("/me", authenticate, async (req, res, next) => {
 });
 
 // ── Get student list (with filters) ──
-router.get("/students", authenticate, authorize("admin"), async (req, res, next) => {
+router.get("/students", authenticate, authorize("admin", "career_advisor"), async (req, res, next) => {
   try {
     const { program, search, page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
@@ -105,36 +105,6 @@ router.get("/students", authenticate, authorize("admin"), async (req, res, next)
   }
 });
 
-// ── Get faculty list (with filters) — all authenticated roles ──
-router.get("/faculty", authenticate, async (req, res, next) => {
-  try {
-    const { search, program, page = 1, limit = 20 } = req.query;
-    const offset = (page - 1) * limit;
-
-    let query = supabase
-      .from("profiles")
-      .select("id, first_name, last_name, email, avatar_url, program, department, current_job_title, linkedin_url", { count: "exact" })
-      .eq("role", "faculty")
-      .eq("is_active", true)
-      .order("last_name", { ascending: true })
-      .range(offset, offset + limit - 1);
-
-    if (search)  query = query.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%`);
-    if (program) query = query.eq("program", program);
-
-    const { data, error, count } = await query;
-    if (error) throw error;
-
-    res.json({
-      faculty: data,
-      total: count,
-      page: parseInt(page),
-      totalPages: Math.ceil(count / limit),
-    });
-  } catch (err) {
-    next(err);
-  }
-});
 
 // ── Get alumni list (with filters) ──
 router.get("/alumni", authenticate, async (req, res, next) => {
@@ -231,7 +201,7 @@ router.post("/avatar", authenticate, async (req, res, next) => {
 router.patch("/:id/role", authenticate, authorize("admin"), async (req, res, next) => {
   try {
     const { role } = req.body;
-    const ALLOWED_ROLES = ["alumni", "student", "faculty", "career_advisor", "admin"];
+    const ALLOWED_ROLES = ["alumni", "student", "career_advisor", "admin"];
     if (!ALLOWED_ROLES.includes(role)) {
       return res.status(400).json({ error: `Invalid role. Must be one of: ${ALLOWED_ROLES.join(", ")}` });
     }
@@ -247,7 +217,7 @@ router.patch("/:id/role", authenticate, authorize("admin"), async (req, res, nex
   } catch (err) { next(err); }
 });
 
-// ── Verify alumni (Faculty/Admin) ──
+// ── Verify alumni (Career Advisor/Admin) ──
 router.patch("/:id/verify", authenticate, authorize("admin"), async (req, res, next) => {
   try {
     const { data, error } = await supabase
