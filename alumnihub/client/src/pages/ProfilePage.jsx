@@ -644,6 +644,10 @@ export default function ProfilePage() {
             mimeType: file.type,
           });
 
+          // Refresh profile first (updates cv_url in UI) before applying AI overrides
+          await loadProfile();
+          setUploading(false);
+
           if (data.status === "parsed" && data.parsedData) {
             const milestones = data.parsedData.milestones || [];
 
@@ -654,18 +658,21 @@ export default function ProfilePage() {
                 city: "City", current_job_title: "Job Title", current_company: "Company",
                 industry: "Industry", linkedin_url: "LinkedIn URL", bio: "Bio",
               };
-              const filled = [];
+              // Compute filled list outside setForm to avoid React Strict Mode double-push
+              const filled = Object.entries(FIELD_LABELS)
+                .filter(([field]) => extracted[field] && String(extracted[field]).trim())
+                .map(([, label]) => label);
+              if (data.parsedData.skills?.length) filled.push("Skills");
+
               setForm((prev) => {
                 const updated = { ...prev };
-                for (const [field, label] of Object.entries(FIELD_LABELS)) {
+                for (const [field] of Object.entries(FIELD_LABELS)) {
                   if (extracted[field] && String(extracted[field]).trim()) {
                     updated[field] = extracted[field];
-                    filled.push(label);
                   }
                 }
                 if (data.parsedData.skills?.length) {
                   updated.skills = [...new Set([...(prev.skills || []), ...data.parsedData.skills])];
-                  filled.push("Skills");
                 }
                 return updated;
               });
@@ -688,9 +695,6 @@ export default function ProfilePage() {
                 : "CV uploaded. No milestones were detected."
             );
           }
-
-          setUploading(false);
-          loadProfile();
         } catch (innerErr) {
           const errorMsg = innerErr.response?.data?.error || "Upload failed.";
           setUploadMsg(typeof errorMsg === "string" ? errorMsg : "Upload failed.");
