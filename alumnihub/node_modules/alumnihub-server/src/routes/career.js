@@ -262,6 +262,86 @@ router.get("/test-ai", async (req, res) => {
   res.json({ ok: anyOk, keys: results });
 });
 
+// ── CV Debug ──
+// Shows what text was extracted from the last uploaded CV and optionally
+// re-runs Gemini so you can see exactly what it returns.
+// GET /api/career/cv-debug          → text extraction result + stored parse
+// GET /api/career/cv-debug?rerun=1  → also calls Gemini live and shows raw output
+router.get("/cv-debug", authenticate, async (req, res, next) => {
+  try {
+    const { data: record } = await supabase
+      .from("cv_parsed_data")
+      .select("*")
+      .eq("profile_id", req.user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (!record) return res.json({ error: "No CV record found. Upload a CV first." });
+
+    const out = {
+      record_id:          record.id,
+      status:             record.status,
+      created_at:         record.created_at,
+      raw_text_length:    record.raw_text?.length ?? 0,
+      raw_text_preview:   record.raw_text ? record.raw_text.slice(0, 800) : null,
+      stored_milestones:  record.parsed_milestones,
+      stored_skills:      record.parsed_skills,
+    };
+
+    if (req.query.rerun === "1" || req.query.rerun === "true") {
+      if (!record.raw_text) {
+        out.rerun = { error: "No raw_text stored — cannot rerun. Re-upload your CV." };
+      } else {
+        const keys = [
+          process.env.GEMINI_API_KEY,
+          process.env.GEMINI_API_KEY_2,
+          process.env.GEMINI_API_KEY_3,
+          process.env.GEMINI_API_KEY_4,
+        ].filter(Boolean);
+
+        const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"];
+        let geminiRaw = null;
+        let geminiParsed = null;
+        let geminiError = null;
+        let modelUsed = null;
+        let keyUsed = null;
+
+        outer: for (const modelName of MODELS) {
+          for (let i = 0; i < keys.length; i++) {
+            try {
+              const genAI = new GoogleGenerativeAI(keys[i]);
+              const model = genAI.getGenerativeModel({ model: modelName });
+              const truncated = record.raw_text.slice(0, 12000);
+              const result = await model.generateContent(`You are a career data extraction assistant. Analyze the CV text and return ONLY valid JSON (no markdown) with keys: profile, milestones, skills.\n\nCV Text:\n${truncated}`);
+              geminiRaw = result.response.text().trim();
+              modelUsed = modelName;
+              keyUsed = i === 0 ? "GEMINI_API_KEY" : `GEMINI_API_KEY_${i + 1}`;
+              try { geminiParsed = JSON.parse(geminiRaw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim()); }
+              catch { geminiParsed = null; }
+              break outer;
+            } catch (err) {
+              geminiError = err.message;
+            }
+          }
+        }
+
+        out.rerun = {
+          model_used:    modelUsed,
+          key_used:      keyUsed,
+          error:         geminiError,
+          raw_response:  geminiRaw,
+          parsed_result: geminiParsed,
+        };
+      }
+    }
+
+    res.json(out);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ══════════════════════════════════════════
 // CV UPLOAD & AI PARSING
 // ══════════════════════════════════════════
