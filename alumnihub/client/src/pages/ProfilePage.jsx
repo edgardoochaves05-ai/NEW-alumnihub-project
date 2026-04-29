@@ -353,6 +353,8 @@ export default function ProfilePage() {
   const [filledFields, setFilledFields]             = useState([]);
   const [failedRecordId, setFailedRecordId]         = useState(null);
   const [retrying, setRetrying]                     = useState(false);
+  const [cvDebug, setCvDebug]                       = useState(null);
+  const [cvDebugging, setCvDebugging]               = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -741,6 +743,19 @@ export default function ProfilePage() {
     }
   }
 
+  async function handleCvDebug(rerun = false) {
+    setCvDebugging(true);
+    setCvDebug(null);
+    try {
+      const { data } = await api.get(`/career/cv-debug${rerun ? "?rerun=1" : ""}`);
+      setCvDebug(data);
+    } catch (err) {
+      setCvDebug({ error: err.response?.data?.error || err.message });
+    } finally {
+      setCvDebugging(false);
+    }
+  }
+
   async function handleConfirmCV() {
     if (!parsedRecord?.id) return;
     setConfirmingCV(true);
@@ -1085,6 +1100,91 @@ export default function ProfilePage() {
                   {retrying ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
                   {retrying ? "Retrying..." : "Retry AI Parsing"}
                 </button>
+              )}
+            </div>
+          )}
+
+          {/* ── CV Debug Panel ── */}
+          {profile.cv_url && (
+            <div className="mt-3">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleCvDebug(false)}
+                  disabled={cvDebugging}
+                  className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 disabled:opacity-50"
+                >
+                  {cvDebugging ? <Loader2 size={11} className="animate-spin" /> : <FileText size={11} />}
+                  Check CV parsing
+                </button>
+                {cvDebug && !cvDebug.error && (
+                  <button
+                    onClick={() => handleCvDebug(true)}
+                    disabled={cvDebugging}
+                    className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 disabled:opacity-50"
+                  >
+                    {cvDebugging ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />}
+                    Re-run Gemini now
+                  </button>
+                )}
+                {cvDebug && (
+                  <button onClick={() => setCvDebug(null)} className="text-xs text-gray-300 hover:text-gray-500">hide</button>
+                )}
+              </div>
+
+              {cvDebug && (
+                <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs space-y-2">
+                  {cvDebug.error ? (
+                    <p className="text-red-600">{cvDebug.error}</p>
+                  ) : (
+                    <>
+                      <div className="flex flex-wrap gap-4">
+                        <span><span className="font-medium text-gray-500">Status:</span> <span className={cvDebug.status === "parsed" ? "text-green-600" : "text-red-500"}>{cvDebug.status}</span></span>
+                        <span><span className="font-medium text-gray-500">Text extracted:</span> {cvDebug.raw_text_length > 0 ? <span className="text-green-600">{cvDebug.raw_text_length.toLocaleString()} chars</span> : <span className="text-red-500">none (image-based PDF?)</span>}</span>
+                      </div>
+
+                      {cvDebug.raw_text_preview && (
+                        <div>
+                          <p className="font-medium text-gray-500 mb-1">Extracted text preview:</p>
+                          <pre className="whitespace-pre-wrap text-gray-700 bg-white border border-gray-100 rounded p-2 max-h-40 overflow-y-auto leading-relaxed">{cvDebug.raw_text_preview}</pre>
+                        </div>
+                      )}
+
+                      {cvDebug.stored_skills?.length > 0 && (
+                        <div>
+                          <p className="font-medium text-gray-500 mb-1">Stored skills:</p>
+                          <p className="text-gray-700">{cvDebug.stored_skills.join(", ")}</p>
+                        </div>
+                      )}
+
+                      {cvDebug.stored_milestones?.length > 0 && (
+                        <div>
+                          <p className="font-medium text-gray-500 mb-1">Stored milestones ({cvDebug.stored_milestones.length}):</p>
+                          <ul className="list-disc pl-4 text-gray-700 space-y-0.5">
+                            {cvDebug.stored_milestones.map((m, i) => (
+                              <li key={i}>{m.title}{m.company ? ` @ ${m.company}` : ""} ({m.start_date || "?"} – {m.end_date || "present"})</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {cvDebug.rerun && (
+                        <div className="border-t border-gray-200 pt-2 space-y-2">
+                          <p className="font-medium text-gray-500">Live Gemini result ({cvDebug.rerun.model_used} · {cvDebug.rerun.key_used}):</p>
+                          {cvDebug.rerun.error && <p className="text-red-500">Error: {cvDebug.rerun.error}</p>}
+                          {cvDebug.rerun.raw_response && (
+                            <div>
+                              <p className="font-medium text-gray-400 mb-1">Raw response:</p>
+                              <pre className="whitespace-pre-wrap text-gray-700 bg-white border border-gray-100 rounded p-2 max-h-60 overflow-y-auto leading-relaxed">{cvDebug.rerun.raw_response}</pre>
+                            </div>
+                          )}
+                          {cvDebug.rerun.parsed_result === null && cvDebug.rerun.raw_response && (
+                            <p className="text-amber-600">Response is not valid JSON — Gemini returned plain text instead of JSON.</p>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               )}
             </div>
           )}
