@@ -371,9 +371,24 @@ router.post("/upload-cv", authenticate, async (req, res, next) => {
       })
       .eq("id", parsedRecord.id);
 
-    // Auto-save competency areas to the profile immediately, replacing any previous skills
-    if (finalStatus === "parsed" && parsedData?.skills?.length > 0) {
-      await supabase.from("profiles").update({ skills: parsedData.skills }).eq("id", req.user.id);
+    // Auto-save everything extracted from the CV directly to the profile
+    if (finalStatus === "parsed" && parsedData) {
+      const PROFILE_FIELDS = [
+        "first_name", "last_name", "phone", "address", "city",
+        "current_job_title", "current_company", "industry", "linkedin_url", "bio",
+      ];
+      const profileUpdate = {};
+      if (parsedData.profile) {
+        for (const field of PROFILE_FIELDS) {
+          const val = parsedData.profile[field];
+          if (val && String(val).trim()) profileUpdate[field] = val;
+        }
+        if (parsedData.profile.avatar_url) profileUpdate.avatar_url = parsedData.profile.avatar_url;
+      }
+      if (parsedData.skills?.length > 0) profileUpdate.skills = parsedData.skills;
+      if (Object.keys(profileUpdate).length > 0) {
+        await supabase.from("profiles").update(profileUpdate).eq("id", req.user.id);
+      }
     }
 
     res.status(201).json({

@@ -636,6 +636,7 @@ export default function ProfilePage() {
           if (data.status === "parsed" && data.parsedData) {
             const milestones = data.parsedData.milestones || [];
 
+            // Show which fields were auto-saved from the CV
             if (data.parsedData.profile) {
               const extracted = data.parsedData.profile;
               const FIELD_LABELS = {
@@ -644,42 +645,27 @@ export default function ProfilePage() {
                 current_company: "Company", industry: "Industry",
                 linkedin_url: "LinkedIn URL", bio: "Bio",
               };
-              // Compute filled list outside setForm to avoid React Strict Mode double-push
               const filled = Object.entries(FIELD_LABELS)
                 .filter(([field]) => extracted[field] && String(extracted[field]).trim())
                 .map(([, label]) => label);
-              if (data.parsedData.skills?.length) filled.push("Technical Skills (auto-saved)");
+              if (data.parsedData.skills?.length) filled.push("Technical Skills");
               if (extracted.avatar_url) filled.push("Profile Photo");
-
-              setForm((prev) => {
-                const updated = { ...prev };
-                for (const [field] of Object.entries(FIELD_LABELS)) {
-                  if (extracted[field] && String(extracted[field]).trim()) {
-                    updated[field] = extracted[field];
-                  }
-                }
-                if (extracted.avatar_url) updated.avatar_url = extracted.avatar_url;
-                return updated;
-              });
-              // Show the extracted avatar as a preview immediately
-              if (extracted.avatar_url) setAvatarPreview(extracted.avatar_url);
               setFilledFields(filled);
-              setEditing(true);
             }
 
             if (milestones.length > 0) {
               setParsedRecord({ id: data.parsedRecordId });
               setReviewMilestones(milestones);
               setSelectedMilestones(new Set(milestones.map((_, i) => i)));
-              setUploadMsg("CV parsed! Review the extracted milestones below before confirming.");
+              setUploadMsg("CV parsed and profile updated! Review the extracted milestones below before confirming.");
             } else {
-              setUploadMsg("CV parsed! Profile fields have been filled in — review and save.");
+              setUploadMsg("CV parsed! Your profile has been updated automatically.");
             }
           } else {
             setUploadMsg(
               data.status === "failed"
-                ? "CV uploaded but AI parsing failed. You can add milestones manually."
-                : "CV uploaded. No milestones were detected."
+                ? "CV uploaded but AI parsing failed. Please try again later."
+                : "CV uploaded. No data was detected."
             );
           }
         } catch (innerErr) {
@@ -1037,13 +1023,13 @@ export default function ProfilePage() {
             <div className="mt-3 flex items-start gap-2 px-3 py-2.5 bg-green-50 border border-green-200 rounded-lg">
               <CheckCircle size={15} className="text-green-600 mt-0.5 flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-green-800 mb-1">Profile fields auto-filled from CV:</p>
+                <p className="text-xs font-semibold text-green-800 mb-1">Auto-saved from your resume:</p>
                 <div className="flex flex-wrap gap-1">
                   {filledFields.map(f => (
                     <span key={f} className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{f}</span>
                   ))}
                 </div>
-                <p className="text-xs text-green-600 mt-1.5">Review the changes above and click <strong>Save Changes</strong> to confirm.</p>
+                <p className="text-xs text-green-600 mt-1.5">Your profile has been updated automatically.</p>
               </div>
               <button onClick={() => setFilledFields([])} className="text-green-400 hover:text-green-600 flex-shrink-0">
                 <X size={14} />
