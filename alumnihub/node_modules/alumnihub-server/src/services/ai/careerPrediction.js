@@ -20,9 +20,12 @@ async function callGemini(prompt) {
     } catch (err) {
       lastError = err;
       const msg = (err.message ?? "").toLowerCase();
-      const isQuota = msg.includes("quota") || msg.includes("rate") ||
-                      msg.includes("exhausted") || msg.includes("429") || err.status === 429;
-      if (!isQuota) throw err;
+      const isTransient = msg.includes("quota") || msg.includes("rate") ||
+                          msg.includes("exhausted") || msg.includes("429") ||
+                          msg.includes("503") || msg.includes("unavailable") ||
+                          msg.includes("overloaded") || msg.includes("high demand") ||
+                          msg.includes("try again") || err.status === 429 || err.status === 503;
+      if (!isTransient) throw err;
     }
   }
   throw lastError;
