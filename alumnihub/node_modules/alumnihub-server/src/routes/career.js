@@ -271,35 +271,18 @@ router.get("/test-ai", async (req, res) => {
 // then triggers AI parsing to extract career milestones
 router.post("/upload-cv", authenticate, async (req, res, next) => {
   try {
-    // Note: In production, use multer or busboy middleware for file handling.
-    // The frontend sends this as multipart/form-data.
-    // For now, we expect the file to be base64 encoded in the body.
-    const { fileBase64, fileName, mimeType } = req.body;
+    // The frontend uploads the file directly to Supabase Storage and sends only
+    // the resulting URL here — avoids the Vercel 4.5 MB serverless body limit.
+    const { cvUrl, filePath, fileName, mimeType } = req.body;
 
-    if (!fileBase64 || !fileName) {
-      return res.status(400).json({ error: "File data and filename are required" });
+    if (!cvUrl || !fileName) {
+      return res.status(400).json({ error: "cvUrl and fileName are required" });
     }
 
-    const fileBuffer = Buffer.from(fileBase64, "base64");
-    const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const filePath = `cvs/${req.user.id}/${Date.now()}_${safeName}`;
-
-    // Upload to Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from("cv-uploads")
-      .upload(filePath, fileBuffer, {
-        contentType: mimeType || "application/pdf",
-        upsert: false,
-      });
-
-    if (uploadError) throw uploadError;
-
-    // Get public URL
-    const { data: urlData } = supabase.storage
-      .from("cv-uploads")
-      .getPublicUrl(filePath);
-
-    const cvUrl = urlData.publicUrl;
+    // Download the file so we can extract text and embedded images
+    const fileResponse = await fetch(cvUrl);
+    if (!fileResponse.ok) throw new Error(`Failed to fetch uploaded file: ${fileResponse.status}`);
+    const fileBuffer = Buffer.from(await fileResponse.arrayBuffer());
 
     // Update profile with CV URL and clear existing skills so a reupload always starts fresh
     await supabase
@@ -473,6 +456,75 @@ router.post("/cv-parsed/:id/confirm", authenticate, async (req, res, next) => {
     res.json({
       message: `${inserted.length} career milestones added successfully`,
       milestones: inserted,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Retry AI parsing for a previously uploaded CV ──
+router.post("/cv-parsed/:id/reparse", authenticate, async (req, res, next) => {
+  try {
+    const { data: record, error } = await supabase
+      .from("cv_parsed_data")
+      .select("*")
+      .eq("id", req.params.id)
+      .eq("profile_id", req.user.id)
+      .single();
+
+    if (error || !record) return res.status(404).json({ error: "Parsed CV record not found." });
+    if (!record.raw_text) return res.status(400).json({ error: "No extracted text available. Please re-upload your CV." });
+
+    await supabase
+      .from("cv_parsed_data")
+      .update({ status: "processing" })
+      .eq("id", record.id);
+
+    let parsedData = null;
+    let finalStatus = "failed";
+
+    try {
+      parsedData = await parseWithAI(record.raw_text);
+      finalStatus = "parsed";
+    } catch (aiError) {
+      console.error("[CV Reparse] AI extraction failed:", aiError.message);
+    }
+
+    await supabase
+      .from("cv_parsed_data")
+      .update({
+        parsed_milestones: parsedData?.milestones || [],
+        parsed_skills:     parsedData?.skills     || [],
+        status:            finalStatus,
+      })
+      .eq("id", record.id);
+
+    if (finalStatus === "parsed" && parsedData) {
+      const PROFILE_FIELDS = [
+        "first_name", "last_name", "phone", "address", "city",
+        "current_job_title", "current_company", "industry", "linkedin_url", "bio",
+      ];
+      const profileUpdate = {};
+      if (parsedData.profile) {
+        for (const field of PROFILE_FIELDS) {
+          const val = parsedData.profile[field];
+          if (val && String(val).trim()) profileUpdate[field] = val;
+        }
+        if (parsedData.profile.avatar_url) profileUpdate.avatar_url = parsedData.profile.avatar_url;
+      }
+      if (parsedData.skills?.length > 0) profileUpdate.skills = parsedData.skills;
+      if (Object.keys(profileUpdate).length > 0) {
+        await supabase.from("profiles").update(profileUpdate).eq("id", req.user.id);
+      }
+    }
+
+    res.json({
+      message: finalStatus === "parsed"
+        ? "AI parsing succeeded. Your profile has been updated."
+        : "AI parsing failed again. Please try again later or re-upload your CV.",
+      status: finalStatus,
+      parsedData: parsedData || null,
+      parsedRecordId: record.id,
     });
   } catch (err) {
     next(err);

@@ -351,6 +351,8 @@ export default function ProfilePage() {
   const [confirmingCV, setConfirmingCV]             = useState(false);
   const [confirmCVMsg, setConfirmCVMsg]             = useState("");
   const [filledFields, setFilledFields]             = useState([]);
+  const [failedRecordId, setFailedRecordId]         = useState(null);
+  const [retrying, setRetrying]                     = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -617,68 +619,125 @@ export default function ProfilePage() {
     setSelectedMilestones(new Set());
     setConfirmCVMsg("");
     setFilledFields([]);
+    setFailedRecordId(null);
 
     try {
-      const reader = new FileReader();
-      reader.onload = async (ev) => {
-        try {
-          const base64 = ev.target.result.split(",")[1];
-          const { data } = await api.post("/career/upload-cv", {
-            fileBase64: base64,
-            fileName: file.name,
-            mimeType: file.type,
-          });
+      // Upload directly to Supabase Storage from the browser — avoids the
+      // Vercel 4.5 MB serverless body limit that base64 JSON would hit.
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const filePath = `cvs/${user.id}/${Date.now()}_${safeName}`;
 
-          // Refresh profile first (updates cv_url in UI) before applying AI overrides
-          await loadProfile();
-          setUploading(false);
+      const { error: storageError } = await supabase.storage
+        .from("cv-uploads")
+        .upload(filePath, file, { contentType: file.type, upsert: false });
 
-          if (data.status === "parsed" && data.parsedData) {
-            const milestones = data.parsedData.milestones || [];
+      if (storageError) throw new Error(storageError.message || "Storage upload failed.");
 
-            // Show which fields were auto-saved from the CV
-            if (data.parsedData.profile) {
-              const extracted = data.parsedData.profile;
-              const FIELD_LABELS = {
-                first_name: "First Name", last_name: "Last Name", phone: "Phone",
-                address: "Address", city: "City", current_job_title: "Job Title",
-                current_company: "Company", industry: "Industry",
-                linkedin_url: "LinkedIn URL", bio: "Bio",
-              };
-              const filled = Object.entries(FIELD_LABELS)
-                .filter(([field]) => extracted[field] && String(extracted[field]).trim())
-                .map(([, label]) => label);
-              if (data.parsedData.skills?.length) filled.push("Technical Skills");
-              if (extracted.avatar_url) filled.push("Profile Photo");
-              setFilledFields(filled);
-            }
+      const { data: urlData } = supabase.storage.from("cv-uploads").getPublicUrl(filePath);
+      const cvUrl = urlData.publicUrl;
 
-            if (milestones.length > 0) {
-              setParsedRecord({ id: data.parsedRecordId });
-              setReviewMilestones(milestones);
-              setSelectedMilestones(new Set(milestones.map((_, i) => i)));
-              setUploadMsg("CV parsed and profile updated! Review the extracted milestones below before confirming.");
-            } else {
-              setUploadMsg("CV parsed! Your profile has been updated automatically.");
-            }
-          } else {
-            setUploadMsg(
-              data.status === "failed"
-                ? "CV uploaded but AI parsing failed. Please try again later."
-                : "CV uploaded. No data was detected."
-            );
+      try {
+        const { data } = await api.post("/career/upload-cv", {
+          cvUrl,
+          filePath,
+          fileName: file.name,
+          mimeType: file.type,
+        });
+
+        // Refresh profile first (updates cv_url in UI) before applying AI overrides
+        await loadProfile();
+        setUploading(false);
+
+        if (data.status === "parsed" && data.parsedData) {
+          const milestones = data.parsedData.milestones || [];
+
+          // Show which fields were auto-saved from the CV
+          if (data.parsedData.profile) {
+            const extracted = data.parsedData.profile;
+            const FIELD_LABELS = {
+              first_name: "First Name", last_name: "Last Name", phone: "Phone",
+              address: "Address", city: "City", current_job_title: "Job Title",
+              current_company: "Company", industry: "Industry",
+              linkedin_url: "LinkedIn URL", bio: "Bio",
+            };
+            const filled = Object.entries(FIELD_LABELS)
+              .filter(([field]) => extracted[field] && String(extracted[field]).trim())
+              .map(([, label]) => label);
+            if (data.parsedData.skills?.length) filled.push("Technical Skills");
+            if (extracted.avatar_url) filled.push("Profile Photo");
+            setFilledFields(filled);
           }
-        } catch (innerErr) {
-          const errorMsg = innerErr.response?.data?.error || "Upload failed.";
-          setUploadMsg(typeof errorMsg === "string" ? errorMsg : "Upload failed.");
-          setUploading(false);
+
+          if (milestones.length > 0) {
+            setParsedRecord({ id: data.parsedRecordId });
+            setReviewMilestones(milestones);
+            setSelectedMilestones(new Set(milestones.map((_, i) => i)));
+            setUploadMsg("CV parsed and profile updated! Review the extracted milestones below before confirming.");
+          } else {
+            setUploadMsg("CV parsed! Your profile has been updated automatically.");
+          }
+        } else {
+          if (data.status === "failed") {
+            setUploadMsg("CV uploaded but AI parsing failed.");
+            if (data.parsedRecordId) setFailedRecordId(data.parsedRecordId);
+          } else {
+            setUploadMsg("CV uploaded. No data was detected.");
+          }
         }
-      };
-      reader.readAsDataURL(file);
+      } catch (innerErr) {
+        const errorMsg = innerErr.response?.data?.error || "Upload failed.";
+        setUploadMsg(typeof errorMsg === "string" ? errorMsg : "Upload failed.");
+        setUploading(false);
+      }
     } catch (err) {
-      const errorMsg = err.response?.data?.error || "Upload failed.";
+      const errorMsg = err.message || err.response?.data?.error || "Upload failed.";
       setUploadMsg(typeof errorMsg === "string" ? errorMsg : "Upload failed.");
       setUploading(false);
+    }
+  }
+
+  async function handleRetryParse() {
+    if (!failedRecordId) return;
+    setRetrying(true);
+    setUploadMsg("Retrying AI parsing...");
+    try {
+      const { data } = await api.post(`/career/cv-parsed/${failedRecordId}/reparse`);
+      if (data.status === "parsed" && data.parsedData) {
+        await loadProfile();
+        setFailedRecordId(null);
+
+        const milestones = data.parsedData.milestones || [];
+        if (data.parsedData.profile) {
+          const extracted = data.parsedData.profile;
+          const FIELD_LABELS = {
+            first_name: "First Name", last_name: "Last Name", phone: "Phone",
+            address: "Address", city: "City", current_job_title: "Job Title",
+            current_company: "Company", industry: "Industry",
+            linkedin_url: "LinkedIn URL", bio: "Bio",
+          };
+          const filled = Object.entries(FIELD_LABELS)
+            .filter(([field]) => extracted[field] && String(extracted[field]).trim())
+            .map(([, label]) => label);
+          if (data.parsedData.skills?.length) filled.push("Technical Skills");
+          if (extracted.avatar_url) filled.push("Profile Photo");
+          setFilledFields(filled);
+        }
+
+        if (milestones.length > 0) {
+          setParsedRecord({ id: data.parsedRecordId });
+          setReviewMilestones(milestones);
+          setSelectedMilestones(new Set(milestones.map((_, i) => i)));
+          setUploadMsg("AI parsing succeeded! Review the extracted milestones below.");
+        } else {
+          setUploadMsg("AI parsing succeeded! Your profile has been updated.");
+        }
+      } else {
+        setUploadMsg("AI parsing failed again. Please try re-uploading your CV later.");
+      }
+    } catch (err) {
+      setUploadMsg("Retry failed. Please try re-uploading your CV.");
+    } finally {
+      setRetrying(false);
     }
   }
 
@@ -1013,9 +1072,21 @@ export default function ProfilePage() {
           )}
 
           {uploadMsg && (
-            <p className={`mt-3 text-sm ${uploadMsg.includes("failed") || uploadMsg.includes("Only") ? "text-red-600" : "text-green-600"}`}>
-              {uploadMsg}
-            </p>
+            <div className="mt-3 flex items-center gap-3 flex-wrap">
+              <p className={`text-sm ${uploadMsg.toLowerCase().includes("failed") || uploadMsg.includes("Only") ? "text-red-600" : "text-green-600"}`}>
+                {uploadMsg}
+              </p>
+              {failedRecordId && (
+                <button
+                  onClick={handleRetryParse}
+                  disabled={retrying}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 disabled:opacity-60 transition-colors"
+                >
+                  {retrying ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                  {retrying ? "Retrying..." : "Retry AI Parsing"}
+                </button>
+              )}
+            </div>
           )}
 
           {/* ── Auto-filled Profile Fields Banner ── */}
