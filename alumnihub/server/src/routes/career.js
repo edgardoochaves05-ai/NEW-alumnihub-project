@@ -84,9 +84,15 @@ async function extractTextFromBuffer(buffer, mimeType) {
 }
 
 async function parseWithAI(rawText) {
-  if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not set in environment variables.");
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  const keys = [
+    process.env.GEMINI_API_KEY,
+    process.env.GEMINI_API_KEY_2,
+    process.env.GEMINI_API_KEY_3,
+    process.env.GEMINI_API_KEY_4,
+  ].filter(Boolean);
+
+  if (keys.length === 0) throw new Error("No GEMINI_API_KEY configured in environment variables.");
+
   const truncated = rawText.slice(0, 12000);
 
   const prompt = `You are a career data extraction assistant. Analyze the CV text below and return ONLY a valid JSON object — no markdown, no explanation.
@@ -94,7 +100,7 @@ async function parseWithAI(rawText) {
 The JSON must have exactly these keys:
 - "profile": object with any of: first_name, last_name, phone, address, city, current_job_title, current_company, industry, linkedin_url, bio (only include fields clearly stated)
 - "milestones": array of milestone objects
-- "skills": flat string array of all skills mentioned
+- "skills": flat string array of TECHNICAL SKILLS ONLY
 
 Each milestone object must have:
 - title (string, required)
@@ -105,18 +111,40 @@ Each milestone object must have:
 - is_current (boolean)
 - location (string or null)
 - description (1-2 sentence summary)
-- skills_used (string array)
+- skills_used (string array of technical skills used in this role)
 - milestone_type (one of: "job","promotion","certification","award","education","other")
 
-Rules: Only include profile fields clearly stated in the CV. Do not guess. Return empty arrays/objects if nothing found.
+Skills extraction rules:
+- "skills" must contain ONLY concrete, verifiable technical skills: programming languages (e.g. Python, Java, JavaScript), frameworks and libraries (e.g. React, Django, Spring Boot), databases (e.g. MySQL, PostgreSQL, MongoDB), tools and platforms (e.g. Git, Docker, AWS, Figma, Jira), technical methodologies (e.g. Agile, Scrum, CI/CD), and professional certifications (e.g. AWS Certified, PMP, CPA).
+- DO NOT include soft skills such as "communication", "teamwork", "leadership", "problem-solving", "time management", "critical thinking", or any personality trait.
+- DO NOT include generic terms such as "Microsoft Office", "internet", "email", or "computer literate" unless a specific tool is named (e.g. "Excel", "PowerPoint").
+- Each skill must be a specific, named technology or tool — not a category or vague descriptor.
+- Return empty array if no qualifying technical skills are found.
+
+General rules: Only include profile fields clearly stated in the CV. Do not guess. Return empty arrays/objects if nothing found.
 
 CV Text:
 ${truncated}`;
 
-  const result = await model.generateContent(prompt);
-  const raw = result.response.text().trim();
-  const cleaned = raw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
-  return JSON.parse(cleaned);
+  let lastError;
+  for (const key of keys) {
+    try {
+      const genAI = new GoogleGenerativeAI(key);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const result = await model.generateContent(prompt);
+      const raw = result.response.text().trim();
+      const cleaned = raw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+      return JSON.parse(cleaned);
+    } catch (err) {
+      lastError = err;
+      const msg = (err.message ?? "").toLowerCase();
+      const isQuotaError = msg.includes("quota") || msg.includes("rate") ||
+                           msg.includes("exhausted") || msg.includes("429") ||
+                           err.status === 429;
+      if (!isQuotaError) throw err;
+    }
+  }
+  throw lastError;
 }
 
 const router = Router();
@@ -190,38 +218,31 @@ router.delete("/milestones/:id", authenticate, async (req, res, next) => {
 
 // ── AI Diagnostic (public, no auth) ──
 router.get("/test-ai", async (req, res) => {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) {
-    return res.json({ ok: false, step: "env", error: "GEMINI_API_KEY is not set" });
-  }
-  try {
-    // Step 1: list available models for this key
-    const listRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`
-    );
-    const listData = await listRes.json();
-    if (!listRes.ok) {
-      return res.json({ ok: false, step: "list-models", error: listData });
-    }
-    const models = (listData.models || [])
-      .filter(m => m.supportedGenerationMethods?.includes("generateContent"))
-      .map(m => m.name);
+  const keys = [
+    process.env.GEMINI_API_KEY,
+    process.env.GEMINI_API_KEY_2,
+    process.env.GEMINI_API_KEY_3,
+    process.env.GEMINI_API_KEY_4,
+  ].filter(Boolean);
 
-    // Step 2: try the first available generateContent model
-    const modelName = models[0];
-    if (!modelName) {
-      return res.json({ ok: false, step: "no-models", availableModels: models });
-    }
+  if (keys.length === 0)
+    return res.json({ ok: false, step: "env", error: "No GEMINI_API_KEY configured" });
 
-    const { GoogleGenerativeAI } = require("@google/generative-ai");
-    const genAI = new GoogleGenerativeAI(key);
-    const model = genAI.getGenerativeModel({ model: modelName.replace("models/", "") });
-    const result = await model.generateContent('Reply with exactly: {"ok":true}');
-    const text = result.response.text().trim();
-    res.json({ ok: true, usedModel: modelName, availableModels: models, response: text });
-  } catch (err) {
-    res.json({ ok: false, step: "gemini", error: err.message });
+  const results = [];
+  for (let i = 0; i < keys.length; i++) {
+    const keyLabel = i === 0 ? "GEMINI_API_KEY" : `GEMINI_API_KEY_${i + 1}`;
+    try {
+      const genAI = new GoogleGenerativeAI(keys[i]);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      await model.generateContent('Reply with exactly: {"ok":true}');
+      results.push({ key: keyLabel, ok: true });
+    } catch (err) {
+      results.push({ key: keyLabel, ok: false, error: err.message });
+    }
   }
+
+  const anyOk = results.some(r => r.ok);
+  res.json({ ok: anyOk, keys: results });
 });
 
 // ══════════════════════════════════════════
@@ -331,6 +352,18 @@ router.post("/upload-cv", authenticate, async (req, res, next) => {
         status:            finalStatus,
       })
       .eq("id", parsedRecord.id);
+
+    // Auto-save technical skills to the profile immediately — no user confirmation needed
+    if (finalStatus === "parsed" && parsedData?.skills?.length > 0) {
+      const { data: currentProfile } = await supabase
+        .from("profiles")
+        .select("skills")
+        .eq("id", req.user.id)
+        .single();
+      const existing = currentProfile?.skills || [];
+      const merged = [...new Set([...existing, ...parsedData.skills])];
+      await supabase.from("profiles").update({ skills: merged }).eq("id", req.user.id);
+    }
 
     res.status(201).json({
       message: finalStatus === "parsed"

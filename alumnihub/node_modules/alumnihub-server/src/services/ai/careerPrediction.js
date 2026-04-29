@@ -1,8 +1,32 @@
 const { supabase } = require("../../config/supabase.js");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-/**
- * Career Path Prediction Engine
- */
+async function callGemini(prompt) {
+  const keys = [
+    process.env.GEMINI_API_KEY,
+    process.env.GEMINI_API_KEY_2,
+    process.env.GEMINI_API_KEY_3,
+    process.env.GEMINI_API_KEY_4,
+  ].filter(Boolean);
+  if (keys.length === 0) throw new Error("No GEMINI_API_KEY configured.");
+  let lastError;
+  for (const key of keys) {
+    try {
+      const genAI = new GoogleGenerativeAI(key);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const result = await model.generateContent(prompt);
+      const raw = result.response.text().trim();
+      return JSON.parse(raw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim());
+    } catch (err) {
+      lastError = err;
+      const msg = (err.message ?? "").toLowerCase();
+      const isQuota = msg.includes("quota") || msg.includes("rate") ||
+                      msg.includes("exhausted") || msg.includes("429") || err.status === 429;
+      if (!isQuota) throw err;
+    }
+  }
+  throw lastError;
+}
 
 async function generateCareerPredictions(profileId) {
   const { data: profile } = await supabase
@@ -13,7 +37,6 @@ async function generateCareerPredictions(profileId) {
 
   if (!profile) throw new Error("Profile not found");
 
-  // Fetch most recent parsed/confirmed CV data for this alumni
   const { data: cvData } = await supabase
     .from("cv_parsed_data")
     .select("parsed_skills, parsed_education")
@@ -23,7 +46,6 @@ async function generateCareerPredictions(profileId) {
     .limit(1)
     .single();
 
-  // Merge profile skills + CV-extracted skills into one deduplicated set
   const profileSkills = profile.skills || [];
   const cvSkills = cvData?.parsed_skills || [];
   const alumniSkills = [...new Set([...profileSkills, ...cvSkills].map(s => s.toLowerCase()))];
@@ -51,12 +73,21 @@ async function generateCareerPredictions(profileId) {
   }
 
   const careerPaths = analyzeCareerPaths(peerAlumni, currentRole);
-  const predictions = generatePredictionResults(careerPaths, profile, alumniSkills);
+
+  let predictions;
+  try {
+    predictions = await generatePredictionsWithGemini(profile, careerPaths, alumniSkills, peerAlumni.length, currentRole);
+  } catch {
+    predictions = generatePredictionResultsFallback(careerPaths, profile, alumniSkills);
+  }
+
+  // Always sort by confidence descending so cards are numbered 1 (highest) → 3 (lowest)
+  predictions.sort((a, b) => b.confidence - a.confidence);
+
   const skillAlignment = computeSkillAlignment(careerPaths.slice(0, 3), alumniSkills);
   const summary = buildSummary(profile, alumniSkills, peerAlumni.length);
   const peerInsights = buildPeerInsights(profile, peerAlumni);
 
-  // Clear stale predictions before inserting fresh ones
   await supabase.from("career_predictions").delete().eq("profile_id", profileId);
 
   for (const prediction of predictions) {
@@ -74,6 +105,69 @@ async function generateCareerPredictions(profileId) {
 
   return { predictions, summary, skillAlignment, peerInsights, sample_size: peerAlumni.length };
 }
+
+async function generatePredictionsWithGemini(profile, careerPaths, alumniSkills, peerCount, currentRole) {
+  const milestones = (profile.career_milestones || [])
+    .sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
+
+  const milestoneLines = milestones.map((m) => {
+    const period = [m.start_date, m.end_date || "present"].filter(Boolean).join("–");
+    const skills = (m.skills_used || []).join(", ");
+    return `- ${m.title || "Unknown"}${m.company ? ` at ${m.company}` : ""}${m.industry ? ` (${m.industry})` : ""} [${period}]${skills ? ` | skills: ${skills}` : ""}`;
+  }).join("\n");
+
+  const topPaths = careerPaths.slice(0, 8).map((p) => {
+    const avgMonths = p.timeDiffs.length > 0
+      ? Math.round(p.timeDiffs.reduce((a, b) => a + b, 0) / p.timeDiffs.length)
+      : null;
+    const topSkills = [...new Set(p.skillsUsed)].slice(0, 6).join(", ");
+    return `- ${p.role}${p.industry ? ` (${p.industry})` : ""} | ${p.count} peer(s)${avgMonths ? ` | avg ${avgMonths} months to transition` : ""}${topSkills ? ` | common skills: ${topSkills}` : ""}`;
+  }).join("\n");
+
+  const VALID_HORIZONS = ["0-1 years", "1-2 years", "2-3 years", "3-5 years"];
+
+  const prompt = `You are a career counselor. Based on the alumni profile and peer patterns, predict the top 3 most likely next career paths.
+
+Alumni:
+Program: ${profile.program || "not specified"}
+Graduation year: ${profile.graduation_year || "not specified"}
+Current role: ${currentRole?.title || "not specified"}${currentRole?.company ? ` at ${currentRole.company}` : ""}
+Industry: ${profile.industry || "not specified"}
+Skills: ${alumniSkills.join(", ") || "none listed"}
+Career milestones:
+${milestoneLines || "none"}
+
+Career path patterns from ${peerCount} peer alumni (sorted by frequency):
+${topPaths || "no peer data"}
+
+Return ONLY a valid JSON array of exactly 3 predictions, sorted by confidence DESCENDING (index 0 = most likely):
+[{"role":"Senior Software Engineer","industry":"Information Technology","confidence":82,"timeHorizon":"1-2 years","reasoning":"2-3 sentences referencing the alumni specific background and peer evidence","requiredSkills":["Docker","Kubernetes"]}]
+
+Rules:
+- confidence is 0–100 (integer), array must be sorted highest to lowest
+- timeHorizon must be exactly one of: "0-1 years", "1-2 years", "2-3 years", "3-5 years"
+- reasoning must be specific to this person — cite their actual roles, industry, skills
+- requiredSkills are skills NOT in the alumni current set that are commonly used in this role
+- If there is insufficient peer data to fill 3 predictions, use the alumni profile alone to infer plausible paths`;
+
+  const geminiResults = await callGemini(prompt);
+
+  if (!Array.isArray(geminiResults) || geminiResults.length === 0) {
+    throw new Error("Gemini returned no predictions");
+  }
+
+  return geminiResults.slice(0, 3).map((r) => ({
+    role: r.role || "Unknown Role",
+    industry: r.industry || "",
+    confidence: Math.min(95, Math.max(0, Number(r.confidence) || 50)),
+    timeHorizon: VALID_HORIZONS.includes(r.timeHorizon) ? r.timeHorizon : "1-2 years",
+    requiredSkills: Array.isArray(r.requiredSkills) ? r.requiredSkills.slice(0, 5) : [],
+    reasoning: r.reasoning || "",
+    peerCount: 0,
+  }));
+}
+
+// ── Rule-based fallback ──────────────────────────────────────────────────────
 
 function analyzeCareerPaths(peerAlumni, currentRole) {
   const pathMap = {};
@@ -107,20 +201,16 @@ function analyzeCareerPaths(peerAlumni, currentRole) {
   return Object.values(pathMap).sort((a, b) => b.count - a.count);
 }
 
-function generatePredictionResults(careerPaths, profile, alumniSkills) {
+function generatePredictionResultsFallback(careerPaths, profile, alumniSkills) {
   const totalPeers = new Set(careerPaths.flatMap((p) => p.fromRoles)).size || 1;
   const predictions = [];
   const topPaths = careerPaths.slice(0, 3);
 
   for (const path of topPaths) {
     const baseConfidence = Math.min(95, Math.round((path.count / totalPeers) * 100));
-
-    // Skill overlap between this alumni and the skills used in this role by peers
     const roleSkills = [...new Set(path.skillsUsed)];
     const overlapCount = alumniSkills.filter(s => roleSkills.includes(s)).length;
     const skillOverlapRatio = roleSkills.length > 0 ? overlapCount / roleSkills.length : 0;
-
-    // Weighted confidence: 70% frequency-based, 30% skill alignment
     const adjustedConfidence = Math.min(95, Math.round(baseConfidence * 0.7 + skillOverlapRatio * 30));
 
     const avgMonths = path.timeDiffs.length > 0
@@ -132,7 +222,6 @@ function generatePredictionResults(careerPaths, profile, alumniSkills) {
       : avgMonths <= 36 ? "2-3 years"
       : "3-5 years";
 
-    // Skills the alumni doesn't have yet that are common in this role
     const requiredSkills = roleSkills
       .filter(s => !alumniSkills.includes(s))
       .slice(0, 5)
@@ -160,7 +249,6 @@ function generatePredictionResults(careerPaths, profile, alumniSkills) {
 function computeSkillAlignment(topPaths, alumniSkills) {
   if (alumniSkills.length === 0) return [];
 
-  // Count how often each skill appears across the top predicted roles
   const skillFrequency = {};
   for (const path of topPaths) {
     for (const skill of path.skillsUsed) {
@@ -168,7 +256,6 @@ function computeSkillAlignment(topPaths, alumniSkills) {
     }
   }
 
-  // Take top 8 skills by frequency
   const topSkills = Object.entries(skillFrequency)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 8)

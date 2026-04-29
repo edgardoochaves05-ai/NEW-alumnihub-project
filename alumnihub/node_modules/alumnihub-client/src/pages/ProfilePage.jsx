@@ -124,7 +124,7 @@ function Field({ label, value, editing, name, onChange, type = "text", options, 
   );
 }
 
-function SkillsEditor({ skills, editing, onAdd, onRemove, inputVal, setInputVal }) {
+function SkillsEditor({ skills, editing, onAdd, inputVal, setInputVal }) {
   const handleKey = (e) => {
     if ((e.key === "Enter" || e.key === ",") && inputVal.trim()) {
       e.preventDefault();
@@ -138,11 +138,6 @@ function SkillsEditor({ skills, editing, onAdd, onRemove, inputVal, setInputVal 
         {skills.map((s) => (
           <span key={s} className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
             {s}
-            {editing && (
-              <button onClick={() => onRemove(s)} className="hover:text-blue-900 ml-0.5">
-                <X size={11} />
-              </button>
-            )}
           </span>
         ))}
         {skills.length === 0 && !editing && <p className="text-sm text-gray-400 italic">No skills added</p>}
@@ -290,7 +285,7 @@ function MilestoneModal({ form, setForm, onSave, onClose, saving }) {
             <label className="label">Skills Used</label>
             <SkillsEditor
               skills={form.skills_used} editing={true}
-              onAdd={addSkill} onRemove={removeSkill}
+              onAdd={addSkill}
               inputVal={skillInput} setInputVal={setSkillInput}
             />
           </div>
@@ -663,7 +658,7 @@ export default function ProfilePage() {
               const filled = Object.entries(FIELD_LABELS)
                 .filter(([field]) => extracted[field] && String(extracted[field]).trim())
                 .map(([, label]) => label);
-              if (data.parsedData.skills?.length) filled.push("Skills");
+              if (data.parsedData.skills?.length) filled.push("Technical Skills (auto-saved)");
               if (extracted.avatar_url) filled.push("Profile Photo");
 
               setForm((prev) => {
@@ -674,9 +669,6 @@ export default function ProfilePage() {
                   }
                 }
                 if (extracted.avatar_url) updated.avatar_url = extracted.avatar_url;
-                if (data.parsedData.skills?.length) {
-                  updated.skills = [...new Set([...(prev.skills || []), ...data.parsedData.skills])];
-                }
                 return updated;
               });
               // Show the extracted avatar as a preview immediately
@@ -982,7 +974,7 @@ export default function ProfilePage() {
           <SectionHeader icon={Tag} title="Skills" />
           <SkillsEditor
             skills={form.skills} editing={editing}
-            onAdd={addSkill} onRemove={removeSkill}
+            onAdd={addSkill}
             inputVal={skillInput} setInputVal={setSkillInput}
           />
         </div>
