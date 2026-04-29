@@ -9,7 +9,7 @@ async function callGemini(prompt) {
     process.env.GEMINI_API_KEY_4,
   ].filter(Boolean);
   if (keys.length === 0) throw new Error("No GEMINI_API_KEY configured.");
-  const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
+  const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"];
   let lastError;
   for (const modelName of MODELS) {
     for (const key of keys) {

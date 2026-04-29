@@ -138,7 +138,7 @@ General rules: Only include profile fields clearly stated in the CV. Do not gues
 CV Text:
 ${truncated}`;
 
-  const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
+  const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"];
   let lastError;
   for (const modelName of MODELS) {
     for (const key of keys) {
