@@ -114,7 +114,7 @@ router.get("/alumni", authenticate, async (req, res, next) => {
 
     let query = supabase
       .from("profiles")
-      .select("id, first_name, last_name, email, program, department, graduation_year, current_job_title, current_company, industry, avatar_url, gender", { count: "exact" })
+      .select("id, first_name, last_name, email, program, department, graduation_year, current_job_title, current_company, industry, avatar_url, gender, is_private, is_verified", { count: "exact" })
       .eq("role", "alumni")
       .eq("is_active", true)
       .order("last_name", { ascending: true })
