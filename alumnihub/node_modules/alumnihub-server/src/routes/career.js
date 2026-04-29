@@ -138,7 +138,7 @@ General rules: Only include profile fields clearly stated in the CV. Do not gues
 CV Text:
 ${truncated}`;
 
-  const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"];
+  const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"];
   let lastError;
   for (const modelName of MODELS) {
     for (const key of keys) {
@@ -281,7 +281,8 @@ router.post("/upload-cv", authenticate, async (req, res, next) => {
     }
 
     const fileBuffer = Buffer.from(fileBase64, "base64");
-    const filePath = `cvs/${req.user.id}/${Date.now()}_${fileName}`;
+    const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const filePath = `cvs/${req.user.id}/${Date.now()}_${safeName}`;
 
     // Upload to Supabase Storage
     const { data: uploadData, error: uploadError } = await supabase.storage
@@ -300,10 +301,10 @@ router.post("/upload-cv", authenticate, async (req, res, next) => {
 
     const cvUrl = urlData.publicUrl;
 
-    // Update profile with CV URL
+    // Update profile with CV URL and clear existing skills so a reupload always starts fresh
     await supabase
       .from("profiles")
-      .update({ cv_url: cvUrl })
+      .update({ cv_url: cvUrl, skills: [] })
       .eq("id", req.user.id);
 
     // Create a cv_parsed_data record in "processing" status
