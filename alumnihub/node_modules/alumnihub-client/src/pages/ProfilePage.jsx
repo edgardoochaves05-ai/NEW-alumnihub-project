@@ -124,29 +124,16 @@ function Field({ label, value, editing, name, onChange, type = "text", options, 
   );
 }
 
-function SkillsEditor({ skills, editing, onAdd, inputVal, setInputVal }) {
-  const handleKey = (e) => {
-    if ((e.key === "Enter" || e.key === ",") && inputVal.trim()) {
-      e.preventDefault();
-      onAdd(inputVal.trim());
-      setInputVal("");
-    }
-  };
+function SkillsEditor({ skills }) {
   return (
-    <div>
-      <div className="flex flex-wrap gap-2 mb-2">
-        {skills.map((s) => (
-          <span key={s} className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
-            {s}
-          </span>
-        ))}
-        {skills.length === 0 && !editing && <p className="text-sm text-gray-400 italic">No skills added</p>}
-      </div>
-      {editing && (
-        <input
-          value={inputVal} onChange={(e) => setInputVal(e.target.value)} onKeyDown={handleKey}
-          className="input-field text-sm" placeholder="Type a skill and press Enter"
-        />
+    <div className="flex flex-wrap gap-2">
+      {(skills || []).map((s) => (
+        <span key={s} className="inline-flex items-center px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
+          {s}
+        </span>
+      ))}
+      {(!skills || skills.length === 0) && (
+        <p className="text-sm text-gray-400 italic">Upload your resume to extract technical skills.</p>
       )}
     </div>
   );
@@ -283,10 +270,20 @@ function MilestoneModal({ form, setForm, onSave, onClose, saving }) {
 
           <div>
             <label className="label">Skills Used</label>
-            <SkillsEditor
-              skills={form.skills_used} editing={true}
-              onAdd={addSkill}
-              inputVal={skillInput} setInputVal={setSkillInput}
+            <div className="flex flex-wrap gap-2 mb-2">
+              {form.skills_used.map((s) => (
+                <span key={s} className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
+                  {s}
+                  <button onClick={() => removeSkill(s)} className="hover:text-blue-900 ml-0.5"><X size={11} /></button>
+                </span>
+              ))}
+            </div>
+            <input
+              value={skillInput}
+              onChange={(e) => setSkillInput(e.target.value)}
+              onKeyDown={(e) => { if ((e.key === "Enter" || e.key === ",") && skillInput.trim()) { e.preventDefault(); addSkill(skillInput.trim()); setSkillInput(""); } }}
+              className="input-field text-sm"
+              placeholder="Type a skill and press Enter"
             />
           </div>
         </div>
@@ -319,9 +316,6 @@ export default function ProfilePage() {
   const [saving, setSaving]       = useState(false);
   const [saveError, setSaveError] = useState("");
   const [saveSuccess, setSaveSuccess] = useState(false);
-
-  // Skills
-  const [skillInput, setSkillInput] = useState("");
 
   // Milestone modal
   const [milestoneModal, setMilestoneModal] = useState(false);
@@ -443,10 +437,6 @@ export default function ProfilePage() {
     setAvatarPreview(URL.createObjectURL(file));
   }
 
-  const addSkill = (s) => {
-    if (s && !form.skills.includes(s)) setForm((p) => ({ ...p, skills: [...p.skills, s] }));
-  };
-  const removeSkill = (s) => setForm((p) => ({ ...p, skills: p.skills.filter((x) => x !== s) }));
 
   async function handleSave() {
     setSaving(true); setSaveError(""); setSaveSuccess(false);
@@ -971,12 +961,9 @@ export default function ProfilePage() {
       {/* ── Skills (Alumni only) ── */}
       {showAlumniSections && (
         <div className="card">
-          <SectionHeader icon={Tag} title="Skills" />
-          <SkillsEditor
-            skills={form.skills} editing={editing}
-            onAdd={addSkill}
-            inputVal={skillInput} setInputVal={setSkillInput}
-          />
+          <SectionHeader icon={Tag} title="Technical Skills" />
+          <p className="text-xs text-gray-400 mb-3">Automatically extracted from your uploaded resume.</p>
+          <SkillsEditor skills={form.skills} />
         </div>
       )}
 

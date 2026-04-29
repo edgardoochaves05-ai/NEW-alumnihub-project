@@ -115,11 +115,23 @@ Each milestone object must have:
 - milestone_type (one of: "job","promotion","certification","award","education","other")
 
 Skills extraction rules:
-- "skills" must contain ONLY concrete, verifiable technical skills: programming languages (e.g. Python, Java, JavaScript), frameworks and libraries (e.g. React, Django, Spring Boot), databases (e.g. MySQL, PostgreSQL, MongoDB), tools and platforms (e.g. Git, Docker, AWS, Figma, Jira), technical methodologies (e.g. Agile, Scrum, CI/CD), and professional certifications (e.g. AWS Certified, PMP, CPA).
-- DO NOT include soft skills such as "communication", "teamwork", "leadership", "problem-solving", "time management", "critical thinking", or any personality trait.
-- DO NOT include generic terms such as "Microsoft Office", "internet", "email", or "computer literate" unless a specific tool is named (e.g. "Excel", "PowerPoint").
-- Each skill must be a specific, named technology or tool — not a category or vague descriptor.
-- Return empty array if no qualifying technical skills are found.
+- "skills" must be a list of professional competency areas — NOT individual tool names.
+- Group related technical skills found in the CV into clear professional labels. Examples:
+  - HTML, CSS, JavaScript, React, Vue, Angular → "Frontend Development"
+  - Node.js, Express, Python, Django, PHP, Laravel, Java, Spring Boot → "Backend Development"
+  - MySQL, PostgreSQL, MongoDB, Firebase, Supabase → "Database Management"
+  - AWS, Azure, GCP, Docker, Kubernetes, CI/CD, Linux → "Cloud & DevOps"
+  - Python, R, pandas, TensorFlow, machine learning, data analysis → "Data Science & Analytics"
+  - Swift, Kotlin, Android, iOS, React Native, Flutter → "Mobile Development"
+  - Figma, Adobe XD, Sketch, Wireframing → "UI/UX Design"
+  - Git, Jira, Agile, Scrum → "Project Management"
+  - Networking, cybersecurity, penetration testing → "Network & Security"
+  - Excel, SAP, QuickBooks, financial modeling, accounting software → "Financial & Accounting Tools"
+  - Photoshop, Illustrator, video editing, Canva → "Graphic Design"
+- If a skill does not fit any group above, create an appropriate short competency label for it.
+- Return at most 8 competency areas.
+- DO NOT include soft skills, personality traits ("leadership", "teamwork", "communication"), or vague terms ("computer literate", "internet", "Microsoft Office").
+- Return empty array if no technical skills are found.
 
 General rules: Only include profile fields clearly stated in the CV. Do not guess. Return empty arrays/objects if nothing found.
 
@@ -353,16 +365,9 @@ router.post("/upload-cv", authenticate, async (req, res, next) => {
       })
       .eq("id", parsedRecord.id);
 
-    // Auto-save technical skills to the profile immediately — no user confirmation needed
+    // Auto-save competency areas to the profile immediately, replacing any previous skills
     if (finalStatus === "parsed" && parsedData?.skills?.length > 0) {
-      const { data: currentProfile } = await supabase
-        .from("profiles")
-        .select("skills")
-        .eq("id", req.user.id)
-        .single();
-      const existing = currentProfile?.skills || [];
-      const merged = [...new Set([...existing, ...parsedData.skills])];
-      await supabase.from("profiles").update({ skills: merged }).eq("id", req.user.id);
+      await supabase.from("profiles").update({ skills: parsedData.skills }).eq("id", req.user.id);
     }
 
     res.status(201).json({
@@ -443,29 +448,6 @@ router.post("/cv-parsed/:id/confirm", authenticate, async (req, res, next) => {
       .update({ status: "confirmed" })
       .eq("id", req.params.id)
       .eq("profile_id", req.user.id);
-
-    // Update profile skills from parsed data
-    const { data: parsedData } = await supabase
-      .from("cv_parsed_data")
-      .select("parsed_skills")
-      .eq("id", req.params.id)
-      .single();
-
-    if (parsedData?.parsed_skills?.length) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("skills")
-        .eq("id", req.user.id)
-        .single();
-
-      const existingSkills = profile?.skills || [];
-      const mergedSkills = [...new Set([...existingSkills, ...parsedData.parsed_skills])];
-
-      await supabase
-        .from("profiles")
-        .update({ skills: mergedSkills })
-        .eq("id", req.user.id);
-    }
 
     res.json({
       message: `${inserted.length} career milestones added successfully`,
