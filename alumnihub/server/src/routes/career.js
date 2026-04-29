@@ -138,24 +138,27 @@ General rules: Only include profile fields clearly stated in the CV. Do not gues
 CV Text:
 ${truncated}`;
 
+  const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
   let lastError;
-  for (const key of keys) {
-    try {
-      const genAI = new GoogleGenerativeAI(key);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-      const result = await model.generateContent(prompt);
-      const raw = result.response.text().trim();
-      const cleaned = raw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
-      return JSON.parse(cleaned);
-    } catch (err) {
-      lastError = err;
-      const msg = (err.message ?? "").toLowerCase();
-      const isTransient = msg.includes("quota") || msg.includes("rate") ||
-                          msg.includes("exhausted") || msg.includes("429") ||
-                          msg.includes("503") || msg.includes("unavailable") ||
-                          msg.includes("overloaded") || msg.includes("high demand") ||
-                          msg.includes("try again") || err.status === 429 || err.status === 503;
-      if (!isTransient) throw err;
+  for (const modelName of MODELS) {
+    for (const key of keys) {
+      try {
+        const genAI = new GoogleGenerativeAI(key);
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent(prompt);
+        const raw = result.response.text().trim();
+        const cleaned = raw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+        return JSON.parse(cleaned);
+      } catch (err) {
+        lastError = err;
+        const msg = (err.message ?? "").toLowerCase();
+        const isTransient = msg.includes("quota") || msg.includes("rate") ||
+                            msg.includes("exhausted") || msg.includes("429") ||
+                            msg.includes("503") || msg.includes("unavailable") ||
+                            msg.includes("overloaded") || msg.includes("high demand") ||
+                            msg.includes("try again") || err.status === 429 || err.status === 503;
+        if (!isTransient) throw err;
+      }
     }
   }
   throw lastError;
