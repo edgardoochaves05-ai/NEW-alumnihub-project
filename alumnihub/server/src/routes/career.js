@@ -4,71 +4,92 @@ const { supabase } = require("../config/supabase.js");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const pdfParse = require("pdf-parse/lib/pdf-parse.js");
 const mammoth  = require("mammoth");
+const pdfjsLib = require("pdfjs-dist/legacy/build/pdf.js");
+const jpegJs   = require("jpeg-js");
 
-// Scan a PDF buffer for embedded images (JPEG and PNG).
-// Returns { data: Buffer, mime: string } for the largest candidate found, or null.
-function extractProfileImageFromPDF(buffer) {
-  const candidates = [];
+// Disable the web worker — not available in Node.js
+pdfjsLib.GlobalWorkerOptions.workerSrc = "";
 
-  // ── JPEG: SOI = FF D8 FF, EOI = FF D9 ──
-  let i = 0;
-  while (i < buffer.length - 3) {
-    if (buffer[i] === 0xFF && buffer[i + 1] === 0xD8 && buffer[i + 2] === 0xFF) {
-      const start = i;
-      let j = start + 4;
-      let found = false;
-      while (j < buffer.length - 1) {
-        if (buffer[j] === 0xFF && buffer[j + 1] === 0xD9) {
-          const size = j + 2 - start;
-          if (size > 2000) candidates.push({ start, end: j + 2, size, mime: "image/jpeg" });
-          i = j + 2;
-          found = true;
-          break;
+// Extract the largest image from a PDF buffer using pdfjs-dist.
+// Handles both raw JPEG streams (Word/LibreOffice) and FlateDecode-compressed
+// streams (Canva, Google Docs). Returns { data: Buffer, mime: string } or null.
+async function extractProfileImageFromPDF(buffer) {
+  try {
+    const loadingTask = pdfjsLib.getDocument({
+      data: new Uint8Array(buffer),
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      disableFontFace: true,
+    });
+    const pdf = await loadingTask.promise;
+    const pageCount = Math.min(pdf.numPages, 3); // check first 3 pages only
+
+    let bestImage = null; // { pixels: Uint8ClampedArray|Buffer, width, height, kind }
+
+    for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const opList = await page.getOperatorList();
+
+      for (let op = 0; op < opList.fnArray.length; op++) {
+        if (opList.fnArray[op] !== pdfjsLib.OPS.paintImageXObject) continue;
+
+        const imgName = opList.argsArray[op][0];
+        // Wait for the image object to be fully loaded
+        const img = await new Promise((resolve) => page.objs.get(imgName, resolve));
+
+        if (!img || !img.data || img.width < 80 || img.height < 80) continue;
+
+        const pixels = img.width * img.height;
+        if (!bestImage || pixels > bestImage.width * bestImage.height) {
+          bestImage = img;
         }
-        j++;
       }
-      if (!found) break;
-    } else {
-      i++;
     }
-  }
 
-  // ── PNG: signature 89 50 4E 47 0D 0A 1A 0A, ends with IEND chunk AE 42 60 82 ──
-  const PNG_SIG = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
-  const IEND    = [0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82];
-  i = 0;
-  while (i < buffer.length - 8) {
-    if (PNG_SIG.every((b, k) => buffer[i + k] === b)) {
-      const start = i;
-      let j = start + 8;
-      let found = false;
-      while (j < buffer.length - 8) {
-        if (IEND.every((b, k) => buffer[j + k] === b)) {
-          const size = j + 8 - start;
-          if (size > 2000) candidates.push({ start, end: j + 8, size, mime: "image/png" });
-          i = j + 8;
-          found = true;
-          break;
-        }
-        j++;
+    if (!bestImage) {
+      console.log("[Avatar] pdfjs found no usable images in PDF");
+      return null;
+    }
+
+    console.log(`[Avatar] pdfjs found image: ${bestImage.width}×${bestImage.height} kind=${bestImage.kind}`);
+
+    // Convert pixel data to RGBA (jpeg-js requires 4-channel RGBA)
+    const { width, height, kind } = bestImage;
+    let rgba;
+
+    if (kind === 3) {
+      // RGBA_32BPP — already 4 channels
+      rgba = Buffer.from(bestImage.data.buffer || bestImage.data);
+    } else if (kind === 2) {
+      // RGB_24BPP — add alpha channel
+      const src = bestImage.data;
+      rgba = Buffer.alloc(width * height * 4);
+      for (let i = 0, j = 0; i < src.length; i += 3, j += 4) {
+        rgba[j]     = src[i];
+        rgba[j + 1] = src[i + 1];
+        rgba[j + 2] = src[i + 2];
+        rgba[j + 3] = 255;
       }
-      if (!found) break;
+    } else if (kind === 1) {
+      // GRAYSCALE_1BPP — expand to RGBA
+      const src = bestImage.data;
+      rgba = Buffer.alloc(width * height * 4);
+      for (let i = 0, j = 0; i < src.length; i++, j += 4) {
+        rgba[j] = rgba[j + 1] = rgba[j + 2] = src[i] ? 255 : 0;
+        rgba[j + 3] = 255;
+      }
     } else {
-      i++;
+      console.log(`[Avatar] Unsupported image kind: ${kind}`);
+      return null;
     }
-  }
 
-  if (candidates.length === 0) {
-    console.log("[Avatar] No embedded images found in PDF");
+    const encoded = jpegJs.encode({ data: rgba, width, height }, 85);
+    console.log(`[Avatar] JPEG encoded: ${encoded.data.length}B`);
+    return { data: Buffer.from(encoded.data), mime: "image/jpeg" };
+  } catch (err) {
+    console.log(`[Avatar] pdfjs extraction failed: ${err.message}`);
     return null;
   }
-
-  console.log(`[Avatar] Found ${candidates.length} image(s):`, candidates.map(c => `${c.mime} ${c.size}B`));
-
-  // Use the largest image — profile photos are bigger than icons/logos
-  const best = candidates.reduce((a, b) => (b.size > a.size ? b : a));
-  console.log(`[Avatar] Selected: ${best.mime} ${best.size}B`);
-  return { data: buffer.slice(best.start, best.end), mime: best.mime };
 }
 
 async function extractTextFromBuffer(buffer, mimeType) {
@@ -437,7 +458,7 @@ router.post("/upload-cv", authenticate, async (req, res, next) => {
     // ── Extract & upload profile photo from PDF (best-effort) ──
     if (mimeType === "application/pdf") {
       try {
-        const imageResult = extractProfileImageFromPDF(fileBuffer);
+        const imageResult = await extractProfileImageFromPDF(fileBuffer);
         if (imageResult) {
           const ext = imageResult.mime === "image/png" ? "png" : "jpg";
           const avatarPath = `avatars/${req.user.id}/${Date.now()}_avatar.${ext}`;
