@@ -456,6 +456,7 @@ router.post("/upload-cv", authenticate, async (req, res, next) => {
     }
 
     // ── Extract & upload profile photo from PDF (best-effort) ──
+    let extractedAvatarUrl = null;
     if (mimeType === "application/pdf") {
       try {
         const imageResult = await extractProfileImageFromPDF(fileBuffer);
@@ -465,18 +466,23 @@ router.post("/upload-cv", authenticate, async (req, res, next) => {
           const { error: avatarUploadError } = await supabase.storage
             .from("cv-uploads")
             .upload(avatarPath, imageResult.data, { contentType: imageResult.mime, upsert: true });
-          if (!avatarUploadError) {
+          if (avatarUploadError) {
+            console.error("[Avatar] Storage upload failed:", avatarUploadError.message);
+          } else {
             const { data: avatarUrlData } = supabase.storage
               .from("cv-uploads")
               .getPublicUrl(avatarPath);
+            extractedAvatarUrl = avatarUrlData.publicUrl;
+            console.log("[Avatar] Uploaded to storage:", extractedAvatarUrl);
+            // Attach to parsedData so it appears in the response's parsedData.profile
             if (parsedData) {
               parsedData.profile = parsedData.profile || {};
-              parsedData.profile.avatar_url = avatarUrlData.publicUrl;
+              parsedData.profile.avatar_url = extractedAvatarUrl;
             }
           }
         }
       } catch (imgError) {
-        console.error("[CV Parse] Avatar extraction failed:", imgError.message);
+        console.error("[Avatar] Extraction failed:", imgError.message);
       }
     }
 
@@ -493,22 +499,34 @@ router.post("/upload-cv", authenticate, async (req, res, next) => {
       .eq("id", parsedRecord.id);
 
     // Auto-save everything extracted from the CV directly to the profile
+    const profileUpdate = {};
+
     if (finalStatus === "parsed" && parsedData) {
       const PROFILE_FIELDS = [
         "first_name", "last_name", "phone", "address", "city",
         "current_job_title", "current_company", "industry", "linkedin_url", "bio",
       ];
-      const profileUpdate = {};
       if (parsedData.profile) {
         for (const field of PROFILE_FIELDS) {
           const val = parsedData.profile[field];
           if (val && String(val).trim()) profileUpdate[field] = val;
         }
-        if (parsedData.profile.avatar_url) profileUpdate.avatar_url = parsedData.profile.avatar_url;
       }
       if (parsedData.skills?.length > 0) profileUpdate.skills = parsedData.skills;
-      if (Object.keys(profileUpdate).length > 0) {
-        await supabase.from("profiles").update(profileUpdate).eq("id", req.user.id);
+    }
+
+    // Always save the avatar if one was extracted — regardless of whether AI parsing succeeded
+    if (extractedAvatarUrl) profileUpdate.avatar_url = extractedAvatarUrl;
+
+    if (Object.keys(profileUpdate).length > 0) {
+      const { error: profileSaveError } = await supabase
+        .from("profiles")
+        .update(profileUpdate)
+        .eq("id", req.user.id);
+      if (profileSaveError) {
+        console.error("[Avatar] Failed to save avatar_url to profile:", profileSaveError.message);
+      } else if (extractedAvatarUrl) {
+        console.log("[Avatar] avatar_url saved to profile successfully");
       }
     }
 
