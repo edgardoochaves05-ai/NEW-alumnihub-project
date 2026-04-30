@@ -92,7 +92,10 @@ function undoPNGPredictor(data, width, channels) {
 function extractProfileImageFromPDF(buffer) {
   const pixelCandidates = []; // { rgba: Buffer, width, height, label }
   const pdfStr = buffer.toString("binary");
-  console.log(`[Avatar] PDF: ${buffer.length}B | /Subtype /Image: ${(pdfStr.match(/\/Subtype\s*\/Image/g)||[]).length} | streams: ${(pdfStr.match(/[\r\n]stream[\r\n]/g)||[]).length} | FF D8 sequences: ${(()=>{let n=0;for(let i=0;i<buffer.length-1;i++)if(buffer[i]===0xFF&&buffer[i+1]===0xD8)n++;return n;})()}`);
+  // Count stream keywords: 'stream' followed by \r or \n but not preceded by 'end'
+  const streamKwCount = (()=>{let n=0;const re=/stream[\r\n]/g;let m;while((m=re.exec(pdfStr))!==null){if(pdfStr.slice(Math.max(0,m.index-3),m.index)!=="end")n++;}return n;})();
+  const ffD8Count = (()=>{let n=0;for(let i=0;i<buffer.length-1;i++)if(buffer[i]===0xFF&&buffer[i+1]===0xD8)n++;return n;})();
+  console.log(`[Avatar] PDF: ${buffer.length}B | /Subtype /Image: ${(pdfStr.match(/\/Subtype\s*\/Image/g)||[]).length} | stream keywords: ${streamKwCount} | FF D8: ${ffD8Count}`);
 
   // ── Strategy 1: DCTDecode / raw JPEG streams ──────────────────────────────
   // Require FF D8 FF (3rd byte must be FF) to filter out coincidental matches
@@ -144,20 +147,21 @@ function extractProfileImageFromPDF(buffer) {
   // be absent from the extracted window and all streams to be skipped.
   {
     const str = pdfStr; // reuse the latin1 string decoded above
-    let flateFound = 0;
+    let flateFound = 0, dctObjFound = 0;
     const imgRe = /\/Subtype\s*\/Image/g;
     let imgMatch;
     while ((imgMatch = imgRe.exec(str)) !== null) {
       const imgIdx = imgMatch.index;
 
-      // Search forward for the 'stream' keyword (not part of 'endstream')
+      // Search forward for the 'stream' keyword (not part of 'endstream').
+      // PDF spec: 'stream' must be FOLLOWED by \r\n or \n (not required to be preceded by one).
       let sIdx = imgIdx;
       for (;;) {
         sIdx = str.indexOf("stream", sIdx + 1);
         if (sIdx < 0 || sIdx - imgIdx > 4000) { sIdx = -1; break; }
-        // Must be a keyword: preceded by \r or \n, and NOT part of 'endstream'
-        const pre2 = str[sIdx - 1];
-        if ((pre2 === "\n" || pre2 === "\r") && str.slice(sIdx - 3, sIdx) !== "end") break;
+        // Check char AFTER 'stream' (must be \r or \n per PDF spec)
+        const ch6 = str[sIdx + 6];
+        if ((ch6 === "\n" || ch6 === "\r") && str.slice(sIdx - 3, sIdx) !== "end") break;
       }
       if (sIdx < 0) continue;
 
@@ -165,6 +169,38 @@ function extractProfileImageFromPDF(buffer) {
       // Take from imgIdx - 500 to capture /Length that may precede /Subtype.
       const winStart = Math.max(0, imgIdx - 500);
       const win = str.slice(winStart, sIdx);
+
+      // Handle DCTDecode images: the stream data is a raw JPEG starting with FF D8 FF
+      const isDCT = /\/DCTDecode/.test(win) || /\/DCT\b/.test(win);
+      if (isDCT) {
+        // The stream data is a raw JPEG — extract and decode it
+        let dataStart = sIdx + 6;
+        if (str[dataStart] === "\r") dataStart++;
+        if (str[dataStart] === "\n") dataStart++;
+        const lengths2 = [...win.matchAll(/\/Length\s+(\d+)/g)];
+        let dataEnd2;
+        if (lengths2.length) {
+          dataEnd2 = dataStart + +lengths2.at(-1)[1];
+        } else {
+          const es2 = str.indexOf("endstream", dataStart);
+          if (es2 < 0) continue;
+          dataEnd2 = es2;
+          if (dataEnd2 > dataStart && str[dataEnd2 - 1] === "\n") dataEnd2--;
+          if (dataEnd2 > dataStart && str[dataEnd2 - 1] === "\r") dataEnd2--;
+        }
+        if (dataEnd2 <= dataStart || dataEnd2 > buffer.length || dataEnd2 - dataStart < 1000) continue;
+        const blob = buffer.slice(dataStart, dataEnd2);
+        if (blob[0] === 0xFF && blob[1] === 0xD8 && blob[2] === 0xFF) {
+          try {
+            const dec = jpegJs.decode(blob, { maxResolutionInMP: 25, colorTransform: false });
+            if (dec.width >= 50 && dec.height >= 50) {
+              pixelCandidates.push({ rgba: dec.data, width: dec.width, height: dec.height, label: `DCT-Obj ${dec.width}×${dec.height}` });
+              dctObjFound++;
+            }
+          } catch {}
+        }
+        continue;
+      }
 
       // Must have FlateDecode (or its abbreviation /Fl)
       if (!/\/FlateDecode/.test(win) && !/\/Fl\b/.test(win)) continue;
@@ -196,9 +232,12 @@ function extractProfileImageFromPDF(buffer) {
       if (lengths.length) {
         dataEnd = dataStart + +lengths.at(-1)[1];
       } else {
-        const es = str.indexOf("\nendstream", dataStart);
+        const es = str.indexOf("endstream", dataStart);
         if (es < 0) continue;
         dataEnd = es;
+        // Trim trailing \r\n that precedes endstream per PDF spec
+        if (dataEnd > dataStart && str[dataEnd - 1] === "\n") dataEnd--;
+        if (dataEnd > dataStart && str[dataEnd - 1] === "\r") dataEnd--;
       }
       if (dataEnd <= dataStart || dataEnd > buffer.length) continue;
 
@@ -218,7 +257,7 @@ function extractProfileImageFromPDF(buffer) {
         flateFound++;
       } catch { /* inflate or predictor failed */ }
     }
-    console.log(`[Avatar] FlateDecode pass: ${flateFound} image stream(s) decoded`);
+    console.log(`[Avatar] XObject pass: ${dctObjFound} DCT + ${flateFound} FlateDecode image(s)`);
   }
 
   // ── Strategy 3: Inflate every stream, check if result is JPEG ───────────
@@ -232,9 +271,9 @@ function extractProfileImageFromPDF(buffer) {
     while (pos3 < pdfStr.length) {
       let sIdx = pdfStr.indexOf("stream", pos3);
       if (sIdx < 0) break;
-      // Must be a keyword (preceded by \r or \n) and not part of 'endstream'
-      const pre3 = pdfStr[sIdx - 1];
-      if ((pre3 !== "\n" && pre3 !== "\r") || pdfStr.slice(sIdx - 3, sIdx) === "end") {
+      // PDF spec: 'stream' must be FOLLOWED by \r\n or \n. Check char AFTER, not before.
+      const ch6 = pdfStr[sIdx + 6];
+      if ((ch6 !== "\n" && ch6 !== "\r") || pdfStr.slice(sIdx - 3, sIdx) === "end") {
         pos3 = sIdx + 6; continue;
       }
 
@@ -242,14 +281,19 @@ function extractProfileImageFromPDF(buffer) {
       if (pdfStr[dataStart] === "\r") dataStart++;
       if (pdfStr[dataStart] === "\n") dataStart++;
 
-      // Find endstream to get data bounds
-      const esIdx = pdfStr.indexOf("\nendstream", dataStart);
-      if (esIdx < 0 || esIdx - dataStart < 500 || esIdx - dataStart > 5_000_000) {
+      // Find endstream — don't require a preceding \n since some PDFs omit it
+      const esIdx = pdfStr.indexOf("endstream", dataStart);
+      if (esIdx < 0 || esIdx - dataStart > 5_000_000) {
         pos3 = sIdx + 6; continue;
       }
+      // Trim trailing \r\n that PDF spec says should precede endstream keyword
+      let dataEnd = esIdx;
+      if (dataEnd > dataStart && pdfStr[dataEnd - 1] === "\n") dataEnd--;
+      if (dataEnd > dataStart && pdfStr[dataEnd - 1] === "\r") dataEnd--;
+      if (dataEnd - dataStart < 500) { pos3 = esIdx + 9; continue; }
 
       try {
-        const inflated = zlib.inflateSync(buffer.slice(dataStart, esIdx));
+        const inflated = zlib.inflateSync(buffer.slice(dataStart, dataEnd));
         // Check for JPEG magic in the inflated result
         if (inflated.length > 3000 && inflated[0] === 0xFF && inflated[1] === 0xD8 && inflated[2] === 0xFF) {
           const dec = jpegJs.decode(inflated, { maxResolutionInMP: 25, colorTransform: false });
