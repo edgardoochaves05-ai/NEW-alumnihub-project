@@ -4,93 +4,60 @@ const { supabase } = require("../config/supabase.js");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const pdfParse = require("pdf-parse/lib/pdf-parse.js");
 const mammoth  = require("mammoth");
-const pdfjsLib = require("pdfjs-dist/legacy/build/pdf.js");
-const jpegJs   = require("jpeg-js");
 
-// Disable the web worker — not available in Node.js
-pdfjsLib.GlobalWorkerOptions.workerSrc = "";
+// ── Avatar image extraction ───────────────────────────────────────────────────
 
-// ── Avatar image extraction helpers ──────────────────────────────────────────
-
-// Convert a pdfjs image object (kind 1/2/3) to a JPEG Buffer via jpeg-js.
-function pdfImgToJpeg(img) {
-  const { width, height, kind } = img;
-  let rgba;
-  // Always use Buffer.from(typedArray) — NOT .buffer — to respect byteOffset/byteLength
-  const src = Buffer.from(img.data);
-  if (kind === 3) {
-    // RGBA_32BPP: 4 bytes per pixel, already in the right format
-    rgba = src;
-  } else if (kind === 2) {
-    // RGB_24BPP: 3 bytes per pixel → expand to RGBA
-    rgba = Buffer.alloc(width * height * 4);
-    for (let i = 0, j = 0; i < src.length; i += 3, j += 4) {
-      rgba[j] = src[i]; rgba[j + 1] = src[i + 1]; rgba[j + 2] = src[i + 2]; rgba[j + 3] = 255;
-    }
-  } else if (kind === 1) {
-    // GRAYSCALE_1BPP: 1 bit per pixel (packed) → RGBA
-    rgba = Buffer.alloc(width * height * 4);
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const bitIndex = y * width + x;
-        const byteIndex = bitIndex >> 3;
-        const bitMask = 0x80 >> (bitIndex & 7);
-        const val = (src[byteIndex] & bitMask) ? 255 : 0;
-        const j = (y * width + x) * 4;
-        rgba[j] = rgba[j + 1] = rgba[j + 2] = val; rgba[j + 3] = 255;
-      }
-    }
-  } else {
-    console.log(`[Avatar] Unsupported image kind: ${kind}`);
-    return null;
-  }
-  try {
-    const encoded = jpegJs.encode({ data: rgba, width, height }, 85);
-    const buf = Buffer.from(encoded.data);
-    // Validate JPEG output: must start with FF D8
-    if (buf[0] !== 0xFF || buf[1] !== 0xD8) {
-      console.log(`[Avatar] jpeg-js output is not a valid JPEG (got ${buf[0].toString(16)} ${buf[1].toString(16)})`);
-      return null;
-    }
-    return buf;
-  } catch (encErr) {
-    console.log(`[Avatar] jpeg-js encode failed: ${encErr.message}`);
-    return null;
-  }
-}
-
-// Parse JPEG dimensions from a SOF marker (quick validity check).
+// Walk a JPEG buffer's marker chain and return its dimensions, or null if
+// the header can't be reliably parsed. Stops before entropy-coded data (SOS)
+// so it never misreads compressed bytes as markers.
 function jpegDimensions(buf) {
-  for (let i = 2; i < buf.length - 8; i++) {
-    if (buf[i] !== 0xFF) continue;
+  if (buf.length < 4 || buf[0] !== 0xFF || buf[1] !== 0xD8) return null;
+  let i = 2;
+  while (i + 1 < buf.length) {
+    if (buf[i] !== 0xFF) { i++; continue; }
     const marker = buf[i + 1];
-    // SOF markers: C0-C3, C5-C7, C9-CB, CD-CF
+    // Standalone markers (no length field): SOI, EOI, RST0-7, TEM
+    if (marker === 0xD8 || marker === 0xD9 || (marker >= 0xD0 && marker <= 0xD7) || marker === 0x01) {
+      i += 2; continue;
+    }
+    // After SOS the payload is entropy-coded — do not scan further
+    if (marker === 0xDA) break;
+    // All other markers carry a 2-byte big-endian length (includes the 2 length bytes)
+    if (i + 3 >= buf.length) break;
+    const segLen = (buf[i + 2] << 8) | buf[i + 3];
+    if (segLen < 2) break;
+    // SOF0/SOF1/SOF2/SOF3/SOF5-7/SOF9-11/SOF13-15 — contain width & height
     if ((marker >= 0xC0 && marker <= 0xCF) && marker !== 0xC4 && marker !== 0xC8 && marker !== 0xCC) {
+      if (i + 8 >= buf.length) break;
       const h = (buf[i + 5] << 8) | buf[i + 6];
       const w = (buf[i + 7] << 8) | buf[i + 8];
-      return { w, h };
+      // Sanity: real photos are under 10 000 px per side
+      if (w > 0 && h > 0 && w < 10000 && h < 10000) return { w, h };
+      return null;
     }
-    i += 1 + ((buf[i + 2] << 8) | buf[i + 3]); // skip segment
+    i += 2 + segLen;
   }
   return null;
 }
 
-// Fallback: scan raw PDF bytes for embedded JPEG streams (DCTDecode, Word/LibreOffice).
-function extractProfileImageRawFallback(buffer) {
+// Scan a PDF buffer for embedded JPEG streams (DCTDecode — Word, LibreOffice, most
+// PDF exporters). Returns { data: Buffer, mime: "image/jpeg" } or null.
+// Picks the candidate with the largest pixel area; falls back to largest byte size.
+function extractProfileImageFromPDF(buffer) {
   const candidates = [];
   let offset = 0;
+  const EOI = Buffer.from([0xFF, 0xD9]);
   while (offset < buffer.length - 3) {
     if (buffer[offset] === 0xFF && buffer[offset + 1] === 0xD8) {
-      const end = buffer.indexOf(Buffer.from([0xFF, 0xD9]), offset + 2);
+      const end = buffer.indexOf(EOI, offset + 2);
       if (end !== -1) {
         const len = end + 2 - offset;
         if (len > 5000) {
           const blob = buffer.slice(offset, end + 2);
           const dims = jpegDimensions(blob);
-          if (dims) {
-            console.log(`[Avatar] Raw fallback: candidate JPEG ${len}B, ${dims.w}×${dims.h}`);
-            candidates.push({ blob, len, area: dims.w * dims.h });
-          }
+          const area = dims ? dims.w * dims.h : 0;
+          console.log(`[Avatar] Candidate ${len}B${dims ? ` ${dims.w}×${dims.h}` : " (dims n/a)"}`);
+          candidates.push({ blob, len, area });
         }
         offset = end + 2;
         continue;
@@ -98,107 +65,17 @@ function extractProfileImageRawFallback(buffer) {
     }
     offset++;
   }
-  if (candidates.length === 0) { console.log("[Avatar] Raw fallback: no valid JPEG found"); return null; }
-  // Pick the JPEG with the largest pixel area (most likely the headshot, not a thumbnail)
-  candidates.sort((a, b) => b.area - a.area);
+  if (candidates.length === 0) { console.log("[Avatar] No JPEG found in PDF"); return null; }
+  // Prefer largest area; tie-break by byte size
+  candidates.sort((a, b) => {
+    if (a.area && b.area) return b.area - a.area;
+    if (a.area) return -1;
+    if (b.area) return 1;
+    return b.len - a.len;
+  });
   const best = candidates[0];
-  console.log(`[Avatar] Raw fallback: using JPEG ${best.len}B, area=${best.area}px`);
+  console.log(`[Avatar] Selected ${best.len}B${best.area ? ` ${Math.round(best.area/1000)}k-px` : ""}`);
   return { data: best.blob, mime: "image/jpeg" };
-}
-
-// Resolve a pdfjs image object by name, checking objs then commonObjs, with a timeout.
-async function resolveImageObj(page, imgName) {
-  const timeout = (ms) => new Promise((r) => setTimeout(() => r(null), ms));
-  const fromObjs = await Promise.race([
-    new Promise((r) => page.objs.get(imgName, r)),
-    timeout(4000),
-  ]);
-  if (fromObjs) return fromObjs;
-
-  const fromCommon = await Promise.race([
-    new Promise((r) => page.commonObjs.get(imgName, r)),
-    timeout(2000),
-  ]);
-  return fromCommon;
-}
-
-// Extract the largest image from a PDF buffer using pdfjs-dist.
-// Handles both raw JPEG streams (Word/LibreOffice) and FlateDecode-compressed
-// streams (Canva, Google Docs). Returns { data: Buffer, mime: string } or null.
-async function extractProfileImageFromPDF(buffer) {
-  try {
-    const loadingTask = pdfjsLib.getDocument({
-      data: new Uint8Array(buffer),
-      useWorkerFetch: false,
-      isEvalSupported: false,
-      disableFontFace: true,
-    });
-    const pdf = await loadingTask.promise;
-    const pageCount = Math.min(pdf.numPages, 3);
-    console.log(`[Avatar] pdfjs: ${pdf.numPages}-page PDF, scanning first ${pageCount} page(s)`);
-
-    let bestImage = null;
-
-    for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
-      const page = await pdf.getPage(pageNum);
-      const opList = await page.getOperatorList();
-      const totalOps = opList.fnArray.length;
-      let imageOpsCount = 0;
-
-      for (let op = 0; op < opList.fnArray.length; op++) {
-        const fn = opList.fnArray[op];
-
-        // Inline images carry their pixel data directly in the args array
-        if (fn === pdfjsLib.OPS.paintInlineImageXObject) {
-          imageOpsCount++;
-          const imgData = opList.argsArray[op][0];
-          if (!imgData || !imgData.data) { console.log(`[Avatar] P${pageNum} op${op}: inline image has no data`); continue; }
-          console.log(`[Avatar] P${pageNum} op${op}: inline ${imgData.width}×${imgData.height}`);
-          if (imgData.width < 50 || imgData.height < 50) continue;
-          const pixels = imgData.width * imgData.height;
-          if (!bestImage || pixels > bestImage.width * bestImage.height) bestImage = imgData;
-          continue;
-        }
-
-        if (fn !== pdfjsLib.OPS.paintImageXObject) continue;
-        imageOpsCount++;
-
-        const imgName = opList.argsArray[op][0];
-        const img = await resolveImageObj(page, imgName);
-
-        if (!img) {
-          console.log(`[Avatar] P${pageNum} op${op}: "${imgName}" — timed out (not resolved from objs/commonObjs)`);
-          continue;
-        }
-        if (!img.data) {
-          console.log(`[Avatar] P${pageNum} op${op}: "${imgName}" — resolved but has no .data`);
-          continue;
-        }
-        console.log(`[Avatar] P${pageNum} op${op}: "${imgName}" ${img.width}×${img.height} kind=${img.kind}`);
-        if (img.width < 50 || img.height < 50) { console.log(`[Avatar] → too small, skipping`); continue; }
-
-        const pixels = img.width * img.height;
-        if (!bestImage || pixels > bestImage.width * bestImage.height) bestImage = img;
-      }
-
-      console.log(`[Avatar] P${pageNum}: ${totalOps} ops, ${imageOpsCount} image op(s) detected`);
-    }
-
-    if (!bestImage) {
-      console.log("[Avatar] pdfjs found no usable images — trying raw byte scanner fallback");
-      return extractProfileImageRawFallback(buffer);
-    }
-
-    console.log(`[Avatar] Best image: ${bestImage.width}×${bestImage.height} kind=${bestImage.kind}`);
-    const jpegBuf = pdfImgToJpeg(bestImage);
-    if (!jpegBuf) return extractProfileImageRawFallback(buffer);
-
-    console.log(`[Avatar] JPEG encoded: ${jpegBuf.length}B`);
-    return { data: jpegBuf, mime: "image/jpeg" };
-  } catch (err) {
-    console.log(`[Avatar] pdfjs extraction failed: ${err.message} — trying raw fallback`);
-    return extractProfileImageRawFallback(buffer);
-  }
 }
 
 async function extractTextFromBuffer(buffer, mimeType) {
