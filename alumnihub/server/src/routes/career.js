@@ -135,73 +135,86 @@ function extractProfileImageFromPDF(buffer) {
   }
 
   // ── Strategy 2: FlateDecode image streams ────────────────────────────────
-  // Parse PDF stream dictionaries, find image XObjects with FlateDecode filter,
-  // decompress with zlib, handle PNG predictor if present.
+  // Forward-search for /Subtype /Image occurrences, then scan forward to the
+  // associated stream keyword. This avoids the lastIndexOf("<<") bug that
+  // returned only the innermost nested dictionary (e.g. DecodeParms) when
+  // the image dict contained sub-dictionaries, causing /Subtype /Image to
+  // be absent from the extracted window and all streams to be skipped.
   {
     const str = buffer.toString("binary"); // latin1 preserves byte values
-    let pos = 0;
     let flateFound = 0;
-    while (pos < str.length) {
-      // Every stream is preceded by its dictionary ending with >>
-      const sIdx = str.indexOf("stream", pos);
-      if (sIdx < 0) break;
-      // 'stream' must be preceded by \n or \r (i.e. it's a keyword, not part of text)
-      const pre = str[sIdx - 1];
-      if (pre !== "\n" && pre !== "\r") { pos = sIdx + 6; continue; }
+    const imgRe = /\/Subtype\s*\/Image/g;
+    let imgMatch;
+    while ((imgMatch = imgRe.exec(str)) !== null) {
+      const imgIdx = imgMatch.index;
 
-      // Find the dictionary immediately before this 'stream'
-      let dEnd = sIdx - 1;
-      while (dEnd > 0 && (str[dEnd] === "\r" || str[dEnd] === "\n" || str[dEnd] === " ")) dEnd--;
-      if (str[dEnd] !== ">" || str[dEnd - 1] !== ">") { pos = sIdx + 6; continue; }
-      const dStart = str.lastIndexOf("<<", dEnd);
-      if (dStart < 0 || dEnd - dStart > 3000) { pos = sIdx + 6; continue; }
-      const dict = str.slice(dStart, dEnd + 1);
+      // Search forward for the 'stream' keyword (not part of 'endstream')
+      let sIdx = imgIdx;
+      for (;;) {
+        sIdx = str.indexOf("stream", sIdx + 1);
+        if (sIdx < 0 || sIdx - imgIdx > 4000) { sIdx = -1; break; }
+        // Must be a keyword: preceded by \r or \n, and NOT part of 'endstream'
+        const pre2 = str[sIdx - 1];
+        if ((pre2 === "\n" || pre2 === "\r") && str.slice(sIdx - 3, sIdx) !== "end") break;
+      }
+      if (sIdx < 0) continue;
 
-      // Must be an Image XObject with a FlateDecode filter
-      if (!(/\/Subtype\s*\/Image/.test(dict))) { pos = sIdx + 6; continue; }
-      if (!(/\/FlateDecode/.test(dict) || /\/Fl\b/.test(dict))) { pos = sIdx + 6; continue; }
+      // Use a 2500-char window before the stream keyword to extract image parameters.
+      // Take from imgIdx - 500 to capture /Length that may precede /Subtype.
+      const winStart = Math.max(0, imgIdx - 500);
+      const win = str.slice(winStart, sIdx);
 
-      // Extract dimensions and length
-      const wm = dict.match(/\/Width\s+(\d+)/);
-      const hm = dict.match(/\/Height\s+(\d+)/);
-      const lm = dict.match(/\/Length\s+(\d+)/);
-      if (!wm || !hm || !lm) { pos = sIdx + 6; continue; }
-      const w = +wm[1], h = +hm[1], streamLen = +lm[1];
-      if (w < 50 || h < 50 || w > 4000 || h > 4000) { pos = sIdx + 6; continue; }
+      // Must have FlateDecode (or its abbreviation /Fl)
+      if (!/\/FlateDecode/.test(win) && !/\/Fl\b/.test(win)) continue;
 
-      // Stream data starts after 'stream' + \r?\n
-      let sStart = sIdx + 6;
-      if (str[sStart] === "\r") sStart++;
-      if (str[sStart] === "\n") sStart++;
-      if (sStart + streamLen > buffer.length) { pos = sIdx + 6; continue; }
+      // Extract Width and Height — use the LAST match in window (skips DecodeParms values)
+      const widths  = [...win.matchAll(/\/Width\s+(\d+)/g)];
+      const heights = [...win.matchAll(/\/Height\s+(\d+)/g)];
+      if (!widths.length || !heights.length) continue;
+      const w = +widths.at(-1)[1];
+      const h = +heights.at(-1)[1];
+      if (w < 50 || h < 50 || w > 5000 || h > 5000) continue;
+
+      // Colour space → number of channels
+      const isGray = /DeviceGray/.test(win);
+      const isCmyk = /DeviceCMYK/.test(win);
+      const ch     = isCmyk ? 4 : isGray ? 1 : 3;
+
+      // PNG predictor present?
+      const hasPred = /\/Predictor\s+1[0-5]/.test(win);
+
+      // Stream data starts right after 'stream' + optional \r\n
+      let dataStart = sIdx + 6;
+      if (str[dataStart] === "\r") dataStart++;
+      if (str[dataStart] === "\n") dataStart++;
+
+      // Determine compressed length: prefer explicit /Length, fall back to endstream search
+      const lengths = [...win.matchAll(/\/Length\s+(\d+)/g)];
+      let dataEnd;
+      if (lengths.length) {
+        dataEnd = dataStart + +lengths.at(-1)[1];
+      } else {
+        const es = str.indexOf("\nendstream", dataStart);
+        if (es < 0) continue;
+        dataEnd = es;
+      }
+      if (dataEnd <= dataStart || dataEnd > buffer.length) continue;
 
       try {
-        const compressed = buffer.slice(sStart, sStart + streamLen);
-        let raw = zlib.inflateSync(compressed);
+        let raw = zlib.inflateSync(buffer.slice(dataStart, dataEnd));
 
-        // Handle PNG row predictor (/Predictor >= 10)
-        const pm = dict.match(/\/Predictor\s+(\d+)/);
-        if (pm && +pm[1] >= 10) {
-          const isGray = /DeviceGray/.test(dict);
-          const isCmyk = /DeviceCMYK/.test(dict);
-          const ch     = isCmyk ? 4 : isGray ? 1 : 3;
-          const fixed  = undoPNGPredictor(raw, w, ch);
-          if (!fixed) { pos = sStart + streamLen; continue; }
+        if (hasPred) {
+          const fixed = undoPNGPredictor(raw, w, ch);
+          if (!fixed) continue;
           raw = fixed;
         }
 
-        // Determine colour space → channels
-        const isGray = /DeviceGray/.test(dict);
-        const isCmyk = /DeviceCMYK/.test(dict);
-        const ch     = isCmyk ? 4 : isGray ? 1 : 3;
-        if (raw.length < w * h * ch * 0.9) { pos = sStart + streamLen; continue; }
+        if (raw.length < w * h * ch * 0.9) continue;
 
         const rgba = toRGBA(raw.slice(0, w * h * ch), ch);
         pixelCandidates.push({ rgba, width: w, height: h, label: `Flate ${w}×${h}` });
         flateFound++;
-      } catch { /* inflate failed — not a valid stream */ }
-
-      pos = sStart + streamLen;
+      } catch { /* inflate or predictor failed */ }
     }
     console.log(`[Avatar] FlateDecode pass: ${flateFound} image stream(s) decoded`);
   }
