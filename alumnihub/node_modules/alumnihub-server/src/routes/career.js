@@ -4,46 +4,17 @@ const { supabase } = require("../config/supabase.js");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const pdfParse = require("pdf-parse/lib/pdf-parse.js");
 const mammoth  = require("mammoth");
+const jpegJs   = require("jpeg-js");
 
 // ── Avatar image extraction ───────────────────────────────────────────────────
 
-// Walk a JPEG buffer's marker chain and return its dimensions, or null if
-// the header can't be reliably parsed. Stops before entropy-coded data (SOS)
-// so it never misreads compressed bytes as markers.
-function jpegDimensions(buf) {
-  if (buf.length < 4 || buf[0] !== 0xFF || buf[1] !== 0xD8) return null;
-  let i = 2;
-  while (i + 1 < buf.length) {
-    if (buf[i] !== 0xFF) { i++; continue; }
-    const marker = buf[i + 1];
-    // Standalone markers (no length field): SOI, EOI, RST0-7, TEM
-    if (marker === 0xD8 || marker === 0xD9 || (marker >= 0xD0 && marker <= 0xD7) || marker === 0x01) {
-      i += 2; continue;
-    }
-    // After SOS the payload is entropy-coded — do not scan further
-    if (marker === 0xDA) break;
-    // All other markers carry a 2-byte big-endian length (includes the 2 length bytes)
-    if (i + 3 >= buf.length) break;
-    const segLen = (buf[i + 2] << 8) | buf[i + 3];
-    if (segLen < 2) break;
-    // SOF0/SOF1/SOF2/SOF3/SOF5-7/SOF9-11/SOF13-15 — contain width & height
-    if ((marker >= 0xC0 && marker <= 0xCF) && marker !== 0xC4 && marker !== 0xC8 && marker !== 0xCC) {
-      if (i + 8 >= buf.length) break;
-      const h = (buf[i + 5] << 8) | buf[i + 6];
-      const w = (buf[i + 7] << 8) | buf[i + 8];
-      // Sanity: real photos are under 10 000 px per side
-      if (w > 0 && h > 0 && w < 10000 && h < 10000) return { w, h };
-      return null;
-    }
-    i += 2 + segLen;
-  }
-  return null;
-}
-
-// Scan a PDF buffer for embedded JPEG streams (DCTDecode — Word, LibreOffice, most
-// PDF exporters). Returns { data: Buffer, mime: "image/jpeg" } or null.
-// Picks the candidate with the largest pixel area; falls back to largest byte size.
+// Scan a PDF buffer for all embedded JPEG streams (DCTDecode — Word, LibreOffice,
+// most PDF exporters). Then decode each candidate, convert CMYK→RGB when needed,
+// and pick the one with the highest luminance variance (= most photo-like content).
+// White/solid-color backgrounds have variance ≈ 0 and are skipped automatically.
+// Returns { data: Buffer, mime: "image/jpeg" } or null.
 function extractProfileImageFromPDF(buffer) {
+  // ── Step 1: collect all JPEG blobs (FF D8 … FF D9) ──
   const candidates = [];
   let offset = 0;
   const EOI = Buffer.from([0xFF, 0xD9]);
@@ -52,30 +23,103 @@ function extractProfileImageFromPDF(buffer) {
       const end = buffer.indexOf(EOI, offset + 2);
       if (end !== -1) {
         const len = end + 2 - offset;
-        if (len > 5000) {
-          const blob = buffer.slice(offset, end + 2);
-          const dims = jpegDimensions(blob);
-          const area = dims ? dims.w * dims.h : 0;
-          console.log(`[Avatar] Candidate ${len}B${dims ? ` ${dims.w}×${dims.h}` : " (dims n/a)"}`);
-          candidates.push({ blob, len, area });
-        }
+        if (len > 3000) candidates.push(buffer.slice(offset, end + 2));
         offset = end + 2;
         continue;
       }
     }
     offset++;
   }
-  if (candidates.length === 0) { console.log("[Avatar] No JPEG found in PDF"); return null; }
-  // Prefer largest area; tie-break by byte size
-  candidates.sort((a, b) => {
-    if (a.area && b.area) return b.area - a.area;
-    if (a.area) return -1;
-    if (b.area) return 1;
-    return b.len - a.len;
-  });
-  const best = candidates[0];
-  console.log(`[Avatar] Selected ${best.len}B${best.area ? ` ${Math.round(best.area/1000)}k-px` : ""}`);
-  return { data: best.blob, mime: "image/jpeg" };
+  console.log(`[Avatar] Raw scan: ${candidates.length} JPEG candidate(s) found in PDF`);
+  if (candidates.length === 0) return null;
+
+  // ── Step 2: decode each candidate, score by luminance variance ──
+  // Headshots have lots of color variation (face, hair, clothing, background).
+  // Solid white backgrounds have variance ≈ 0.
+  let bestResult = null;
+  let bestScore  = -1;
+
+  for (let ci = 0; ci < candidates.length; ci++) {
+    const blob = candidates[ci];
+    try {
+      // colorTransform:false keeps raw channel values (important for CMYK detection)
+      const decoded = jpegJs.decode(blob, { maxResolutionInMP: 25, colorTransform: false });
+      const { data, width, height } = decoded;
+
+      // ── Step 2a: CMYK → RGB conversion when needed ──
+      // jpeg-js with colorTransform:false for a CMYK JPEG returns C,M,Y,K in the R,G,B,A slots.
+      // We detect this by checking if the JPEG SOF marker reports 4 components.
+      let rgbaData = data;
+      let isCmyk = false;
+      {
+        // Parse SOF from the blob to get nComponents
+        let i = 2;
+        while (i + 3 < blob.length) {
+          if (blob[i] !== 0xFF) { i++; continue; }
+          const mk = blob[i + 1];
+          if (mk === 0xD9 || mk === 0xDA) break; // EOI or SOS
+          if (mk === 0xD8 || mk === 0xD9 || (mk >= 0xD0 && mk <= 0xD7) || mk === 0x01) { i += 2; continue; }
+          if (i + 3 >= blob.length) break;
+          const sLen = (blob[i + 2] << 8) | blob[i + 3];
+          if (sLen < 2) break;
+          if ((mk >= 0xC0 && mk <= 0xCF) && mk !== 0xC4 && mk !== 0xC8 && mk !== 0xCC) {
+            if (i + 9 < blob.length) isCmyk = blob[i + 9] === 4;
+            break;
+          }
+          i += 2 + sLen;
+        }
+      }
+
+      if (isCmyk) {
+        // Convert CMYK (stored in R,G,B,A slots by jpeg-js) → RGBA
+        const out = Buffer.alloc(data.length);
+        for (let i = 0; i < data.length; i += 4) {
+          const c = data[i] / 255, m = data[i + 1] / 255;
+          const y = data[i + 2] / 255, k = data[i + 3] / 255;
+          out[i]     = Math.round(255 * (1 - c) * (1 - k));
+          out[i + 1] = Math.round(255 * (1 - m) * (1 - k));
+          out[i + 2] = Math.round(255 * (1 - y) * (1 - k));
+          out[i + 3] = 255;
+        }
+        rgbaData = out;
+      }
+
+      // ── Step 2b: sample luminance variance ──
+      const SAMPLES = 400;
+      const step = Math.max(1, Math.floor(rgbaData.length / 4 / SAMPLES)) * 4;
+      let sum = 0, count = 0;
+      for (let i = 0; i < rgbaData.length; i += step) {
+        sum += 0.299 * rgbaData[i] + 0.587 * rgbaData[i + 1] + 0.114 * rgbaData[i + 2];
+        count++;
+      }
+      const mean = sum / count;
+      let variance = 0;
+      for (let i = 0; i < rgbaData.length; i += step) {
+        const lum = 0.299 * rgbaData[i] + 0.587 * rgbaData[i + 1] + 0.114 * rgbaData[i + 2];
+        variance += (lum - mean) ** 2;
+      }
+      variance /= count;
+
+      console.log(`[Avatar] Candidate ${ci + 1}: ${blob.length}B ${width}×${height} cmyk=${isCmyk} variance=${variance.toFixed(0)}`);
+
+      if (variance > bestScore) {
+        bestScore = variance;
+        // Build the final JPEG to store: re-encode CMYK→RGB; keep others as-is
+        if (isCmyk) {
+          const encoded = jpegJs.encode({ data: rgbaData, width, height }, 88);
+          bestResult = Buffer.from(encoded.data);
+        } else {
+          bestResult = blob;
+        }
+      }
+    } catch (err) {
+      console.log(`[Avatar] Candidate ${ci + 1}: decode failed — ${err.message}`);
+    }
+  }
+
+  if (!bestResult) { console.log("[Avatar] No decodable JPEG found"); return null; }
+  console.log(`[Avatar] Best candidate score=${bestScore.toFixed(0)}, size=${bestResult.length}B`);
+  return { data: bestResult, mime: "image/jpeg" };
 }
 
 async function extractTextFromBuffer(buffer, mimeType) {
