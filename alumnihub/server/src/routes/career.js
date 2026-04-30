@@ -139,16 +139,40 @@ CV Text:
 ${truncated}`;
 
   const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"];
+  const keyLabels = keys.map((_, i) => (i === 0 ? "GEMINI_API_KEY" : `GEMINI_API_KEY_${i + 1}`));
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // Extract a suggested retry delay from the error message (e.g. "retry after 30s")
+  const parseRetryDelay = (msg) => {
+    const match = msg.match(/retry[^\d]*(\d+)\s*s/i);
+    return match ? Math.min(parseInt(match[1]) * 1000, 15000) : 0;
+  };
+
+  console.log(`[AI] Starting parse — ${keys.length} key(s) configured, models: ${MODELS.join(", ")}`);
+
   let lastError;
-  for (const modelName of MODELS) {
-    for (const key of keys) {
+  for (let m = 0; m < MODELS.length; m++) {
+    const modelName = MODELS[m];
+    for (let i = 0; i < keys.length; i++) {
+      const keyLabel = keyLabels[i];
+      // Wait between attempts: 1.5s between key switches, 3s when switching models
+      const isFirstAttempt = m === 0 && i === 0;
+      if (!isFirstAttempt) {
+        const delay = i === 0 ? 3000 : 1500;
+        console.log(`[AI] Waiting ${delay / 1000}s before next attempt…`);
+        await sleep(delay);
+      }
+
+      console.log(`[AI] Trying ${modelName} / ${keyLabel}…`);
       try {
-        const genAI = new GoogleGenerativeAI(key);
+        const genAI = new GoogleGenerativeAI(keys[i]);
         const model = genAI.getGenerativeModel({ model: modelName });
         const result = await model.generateContent(prompt);
         const raw = result.response.text().trim();
         const cleaned = raw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
-        return JSON.parse(cleaned);
+        const parsed = JSON.parse(cleaned);
+        console.log(`[AI] ✓ Success — ${modelName} / ${keyLabel}`);
+        return parsed;
       } catch (err) {
         lastError = err;
         const msg = (err.message ?? "").toLowerCase();
@@ -157,10 +181,23 @@ ${truncated}`;
                             msg.includes("503") || msg.includes("unavailable") ||
                             msg.includes("overloaded") || msg.includes("high demand") ||
                             msg.includes("try again") || err.status === 429 || err.status === 503;
-        if (!isTransient) throw err;
+        if (isTransient) {
+          const suggested = parseRetryDelay(msg);
+          const note = suggested ? ` (API suggests ${suggested / 1000}s wait)` : "";
+          console.log(`[AI] ✗ ${modelName} / ${keyLabel} — transient error${note}: ${err.message?.slice(0, 80)}`);
+          // If the API explicitly tells us to wait longer, honour it (cap at 15s)
+          if (suggested > 1500) {
+            console.log(`[AI] Honouring API retry delay: ${suggested / 1000}s`);
+            await sleep(suggested);
+          }
+        } else {
+          console.log(`[AI] ✗ ${modelName} / ${keyLabel} — non-transient error: ${err.message?.slice(0, 120)}`);
+          throw err;
+        }
       }
     }
   }
+  console.log(`[AI] All models and keys exhausted. Last error: ${lastError?.message}`);
   throw lastError;
 }
 
