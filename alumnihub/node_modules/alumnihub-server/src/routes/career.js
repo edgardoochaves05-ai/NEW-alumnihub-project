@@ -91,6 +91,8 @@ function undoPNGPredictor(data, width, channels) {
 // Returns { data: Buffer, mime: "image/jpeg" } or null.
 function extractProfileImageFromPDF(buffer) {
   const pixelCandidates = []; // { rgba: Buffer, width, height, label }
+  const pdfStr = buffer.toString("binary");
+  console.log(`[Avatar] PDF: ${buffer.length}B | /Subtype /Image: ${(pdfStr.match(/\/Subtype\s*\/Image/g)||[]).length} | streams: ${(pdfStr.match(/[\r\n]stream[\r\n]/g)||[]).length} | FF D8 sequences: ${(()=>{let n=0;for(let i=0;i<buffer.length-1;i++)if(buffer[i]===0xFF&&buffer[i+1]===0xD8)n++;return n;})()}`);
 
   // ── Strategy 1: DCTDecode / raw JPEG streams ──────────────────────────────
   // Require FF D8 FF (3rd byte must be FF) to filter out coincidental matches
@@ -141,7 +143,7 @@ function extractProfileImageFromPDF(buffer) {
   // the image dict contained sub-dictionaries, causing /Subtype /Image to
   // be absent from the extracted window and all streams to be skipped.
   {
-    const str = buffer.toString("binary"); // latin1 preserves byte values
+    const str = pdfStr; // reuse the latin1 string decoded above
     let flateFound = 0;
     const imgRe = /\/Subtype\s*\/Image/g;
     let imgMatch;
@@ -219,6 +221,67 @@ function extractProfileImageFromPDF(buffer) {
     console.log(`[Avatar] FlateDecode pass: ${flateFound} image stream(s) decoded`);
   }
 
+  // ── Strategy 3: Inflate every stream, check if result is JPEG ───────────
+  // Handles PDFs that store image dictionaries in compressed object streams
+  // (PDF 1.5+ ObjStm), making /Subtype /Image invisible in the raw binary.
+  // The actual image DATA stream is always uncompressed at the PDF body level,
+  // so inflating streams and testing for JPEG magic is a reliable fallback.
+  if (pixelCandidates.length === 0) {
+    let bruteFound = 0;
+    let pos3 = 0;
+    while (pos3 < pdfStr.length) {
+      let sIdx = pdfStr.indexOf("stream", pos3);
+      if (sIdx < 0) break;
+      // Must be a keyword (preceded by \r or \n) and not part of 'endstream'
+      const pre3 = pdfStr[sIdx - 1];
+      if ((pre3 !== "\n" && pre3 !== "\r") || pdfStr.slice(sIdx - 3, sIdx) === "end") {
+        pos3 = sIdx + 6; continue;
+      }
+
+      let dataStart = sIdx + 6;
+      if (pdfStr[dataStart] === "\r") dataStart++;
+      if (pdfStr[dataStart] === "\n") dataStart++;
+
+      // Find endstream to get data bounds
+      const esIdx = pdfStr.indexOf("\nendstream", dataStart);
+      if (esIdx < 0 || esIdx - dataStart < 500 || esIdx - dataStart > 5_000_000) {
+        pos3 = sIdx + 6; continue;
+      }
+
+      try {
+        const inflated = zlib.inflateSync(buffer.slice(dataStart, esIdx));
+        // Check for JPEG magic in the inflated result
+        if (inflated.length > 3000 && inflated[0] === 0xFF && inflated[1] === 0xD8 && inflated[2] === 0xFF) {
+          const dec = jpegJs.decode(inflated, { maxResolutionInMP: 25, colorTransform: false });
+          if (dec.width >= 50 && dec.height >= 50) {
+            let isCmyk = false;
+            let si = 2;
+            while (si + 3 < inflated.length) {
+              if (inflated[si] !== 0xFF) { si++; continue; }
+              const mk = inflated[si + 1];
+              if (mk === 0xD9 || mk === 0xDA) break;
+              if (mk === 0xD8 || (mk >= 0xD0 && mk <= 0xD7) || mk === 0x01) { si += 2; continue; }
+              if (si + 3 >= inflated.length) break;
+              const sl = (inflated[si + 2] << 8) | inflated[si + 3];
+              if (sl < 2) break;
+              if ((mk >= 0xC0 && mk <= 0xCF) && mk !== 0xC4 && mk !== 0xC8 && mk !== 0xCC) {
+                if (si + 9 < inflated.length) isCmyk = inflated[si + 9] === 4;
+                break;
+              }
+              si += 2 + sl;
+            }
+            const rgba = isCmyk ? toRGBA(dec.data, 4) : dec.data;
+            pixelCandidates.push({ rgba, width: dec.width, height: dec.height, label: `Brute-JPEG ${dec.width}×${dec.height}` });
+            bruteFound++;
+          }
+        }
+      } catch { /* inflate or jpeg decode failed */ }
+
+      pos3 = esIdx + 10; // skip past endstream
+    }
+    console.log(`[Avatar] Brute-force pass: ${bruteFound} JPEG-in-FlateDecode found`);
+  }
+
   if (pixelCandidates.length === 0) { console.log("[Avatar] No decodable image found in PDF"); return null; }
 
   // ── Pick the most photo-like candidate by luminance variance ──────────────
@@ -235,23 +298,80 @@ function extractProfileImageFromPDF(buffer) {
   return { data: out, mime: "image/jpeg" };
 }
 
-// Extract the largest embedded image from a DOCX buffer via mammoth's image handler.
+// Parse the DOCX ZIP directly and return all images from word/media/*.
+// More reliable than mammoth's convertImage because it captures images in
+// floating text boxes, shapes, headers/footers, and any other container —
+// mammoth only fires its image callback for inline body images.
+function extractImagesFromDOCXZip(buffer) {
+  const images = [];
+  let pos = 0;
+  while (pos < buffer.length - 30) {
+    // Local file header signature: PK\x03\x04
+    if (buffer[pos] !== 0x50 || buffer[pos+1] !== 0x4B ||
+        buffer[pos+2] !== 0x03 || buffer[pos+3] !== 0x04) { pos++; continue; }
+
+    const compression  = buffer.readUInt16LE(pos + 8);
+    const compressedSz = buffer.readUInt32LE(pos + 18);
+    const fileNameLen  = buffer.readUInt16LE(pos + 26);
+    const extraLen     = buffer.readUInt16LE(pos + 28);
+    const dataStart    = pos + 30 + fileNameLen + extraLen;
+
+    let fileName = '';
+    try { fileName = buffer.slice(pos + 30, pos + 30 + fileNameLen).toString('utf8'); } catch {}
+
+    const m = /^word\/media\/.+\.(\w+)$/i.exec(fileName);
+    if (m && compressedSz > 0 && dataStart + compressedSz <= buffer.length) {
+      const ext = m[1].toLowerCase();
+      const mime = {
+        jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+        gif: 'image/gif', bmp: 'image/bmp', webp: 'image/webp',
+        tif: 'image/tiff', tiff: 'image/tiff',
+      }[ext];
+      if (mime) {
+        try {
+          const raw = buffer.slice(dataStart, dataStart + compressedSz);
+          // ZIP compression: 0 = STORE (raw), 8 = DEFLATE
+          const data = compression === 0 ? raw : zlib.inflateRawSync(raw);
+          if (data.length > 200) images.push({ data, mime, name: fileName });
+        } catch { /* bad entry, skip */ }
+      }
+    }
+
+    pos = dataStart + Math.max(compressedSz, 1);
+  }
+  return images;
+}
+
+// Extract the largest embedded image from a DOCX buffer.
+// Primary: read directly from the DOCX ZIP (word/media/*).
+// Fallback: mammoth convertImage handler (inline body images only).
 // Returns { data: Buffer, mime: string } or null.
 async function extractProfileImageFromDOCX(buffer) {
+  // Direct ZIP parsing captures all images regardless of placement.
+  const zipImages = extractImagesFromDOCXZip(buffer);
+  console.log(`[Avatar] DOCX ZIP scan: ${zipImages.length} image(s) in word/media/`);
+  if (zipImages.length > 0) {
+    zipImages.sort((a, b) => b.data.length - a.data.length);
+    const best = zipImages[0];
+    console.log(`[Avatar] DOCX: using ${best.name} (${best.mime}, ${best.data.length}B)`);
+    return best;
+  }
+
+  // Fallback: mammoth (handles edge cases where ZIP scan misses embedded images)
   const images = [];
   await mammoth.convertToHtml({ buffer }, {
     convertImage: mammoth.images.imgElement((image) =>
-      image.read("buffer").then((buf) => {
-        images.push({ data: buf, mime: image.contentType || "image/jpeg" });
+      image.read("base64").then((b64) => {
+        const data = Buffer.from(b64, "base64");
+        images.push({ data, mime: image.contentType || "image/jpeg" });
         return { src: "" };
       })
     ),
   });
   if (images.length === 0) { console.log("[Avatar] DOCX: no images found"); return null; }
-  // Pick largest by byte size — headshot photos are typically larger than diagrams/icons
   images.sort((a, b) => b.data.length - a.data.length);
   const best = images[0];
-  console.log(`[Avatar] DOCX: ${images.length} image(s) found, using ${best.mime} ${best.data.length}B`);
+  console.log(`[Avatar] DOCX mammoth: ${images.length} image(s), using ${best.mime} ${best.data.length}B`);
   return best;
 }
 
