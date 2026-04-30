@@ -16,39 +16,81 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = "";
 function pdfImgToJpeg(img) {
   const { width, height, kind } = img;
   let rgba;
+  // Always use Buffer.from(typedArray) — NOT .buffer — to respect byteOffset/byteLength
+  const src = Buffer.from(img.data);
   if (kind === 3) {
-    rgba = Buffer.from(img.data.buffer || img.data);
+    // RGBA_32BPP: 4 bytes per pixel, already in the right format
+    rgba = src;
   } else if (kind === 2) {
-    const src = img.data;
+    // RGB_24BPP: 3 bytes per pixel → expand to RGBA
     rgba = Buffer.alloc(width * height * 4);
     for (let i = 0, j = 0; i < src.length; i += 3, j += 4) {
       rgba[j] = src[i]; rgba[j + 1] = src[i + 1]; rgba[j + 2] = src[i + 2]; rgba[j + 3] = 255;
     }
   } else if (kind === 1) {
-    const src = img.data;
+    // GRAYSCALE_1BPP: 1 bit per pixel (packed) → RGBA
     rgba = Buffer.alloc(width * height * 4);
-    for (let i = 0, j = 0; i < src.length; i++, j += 4) {
-      rgba[j] = rgba[j + 1] = rgba[j + 2] = src[i] ? 255 : 0; rgba[j + 3] = 255;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const bitIndex = y * width + x;
+        const byteIndex = bitIndex >> 3;
+        const bitMask = 0x80 >> (bitIndex & 7);
+        const val = (src[byteIndex] & bitMask) ? 255 : 0;
+        const j = (y * width + x) * 4;
+        rgba[j] = rgba[j + 1] = rgba[j + 2] = val; rgba[j + 3] = 255;
+      }
     }
   } else {
     console.log(`[Avatar] Unsupported image kind: ${kind}`);
     return null;
   }
-  const encoded = jpegJs.encode({ data: rgba, width, height }, 85);
-  return Buffer.from(encoded.data);
+  try {
+    const encoded = jpegJs.encode({ data: rgba, width, height }, 85);
+    const buf = Buffer.from(encoded.data);
+    // Validate JPEG output: must start with FF D8
+    if (buf[0] !== 0xFF || buf[1] !== 0xD8) {
+      console.log(`[Avatar] jpeg-js output is not a valid JPEG (got ${buf[0].toString(16)} ${buf[1].toString(16)})`);
+      return null;
+    }
+    return buf;
+  } catch (encErr) {
+    console.log(`[Avatar] jpeg-js encode failed: ${encErr.message}`);
+    return null;
+  }
+}
+
+// Parse JPEG dimensions from a SOF marker (quick validity check).
+function jpegDimensions(buf) {
+  for (let i = 2; i < buf.length - 8; i++) {
+    if (buf[i] !== 0xFF) continue;
+    const marker = buf[i + 1];
+    // SOF markers: C0-C3, C5-C7, C9-CB, CD-CF
+    if ((marker >= 0xC0 && marker <= 0xCF) && marker !== 0xC4 && marker !== 0xC8 && marker !== 0xCC) {
+      const h = (buf[i + 5] << 8) | buf[i + 6];
+      const w = (buf[i + 7] << 8) | buf[i + 8];
+      return { w, h };
+    }
+    i += 1 + ((buf[i + 2] << 8) | buf[i + 3]); // skip segment
+  }
+  return null;
 }
 
 // Fallback: scan raw PDF bytes for embedded JPEG streams (DCTDecode, Word/LibreOffice).
 function extractProfileImageRawFallback(buffer) {
-  let bestJpeg = null;
+  const candidates = [];
   let offset = 0;
   while (offset < buffer.length - 3) {
     if (buffer[offset] === 0xFF && buffer[offset + 1] === 0xD8) {
       const end = buffer.indexOf(Buffer.from([0xFF, 0xD9]), offset + 2);
       if (end !== -1) {
         const len = end + 2 - offset;
-        if (len > 5000 && (!bestJpeg || len > bestJpeg.length)) {
-          bestJpeg = buffer.slice(offset, end + 2);
+        if (len > 5000) {
+          const blob = buffer.slice(offset, end + 2);
+          const dims = jpegDimensions(blob);
+          if (dims) {
+            console.log(`[Avatar] Raw fallback: candidate JPEG ${len}B, ${dims.w}×${dims.h}`);
+            candidates.push({ blob, len, area: dims.w * dims.h });
+          }
         }
         offset = end + 2;
         continue;
@@ -56,9 +98,12 @@ function extractProfileImageRawFallback(buffer) {
     }
     offset++;
   }
-  if (!bestJpeg) { console.log("[Avatar] Raw fallback: no JPEG found"); return null; }
-  console.log(`[Avatar] Raw fallback: found JPEG ${bestJpeg.length}B`);
-  return { data: bestJpeg, mime: "image/jpeg" };
+  if (candidates.length === 0) { console.log("[Avatar] Raw fallback: no valid JPEG found"); return null; }
+  // Pick the JPEG with the largest pixel area (most likely the headshot, not a thumbnail)
+  candidates.sort((a, b) => b.area - a.area);
+  const best = candidates[0];
+  console.log(`[Avatar] Raw fallback: using JPEG ${best.len}B, area=${best.area}px`);
+  return { data: best.blob, mime: "image/jpeg" };
 }
 
 // Resolve a pdfjs image object by name, checking objs then commonObjs, with a timeout.

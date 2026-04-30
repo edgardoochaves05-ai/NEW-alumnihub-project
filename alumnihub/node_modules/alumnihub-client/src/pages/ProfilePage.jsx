@@ -330,6 +330,7 @@ export default function ProfilePage() {
   const [avatarFile, setAvatarFile]       = useState(null);
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarImgError, setAvatarImgError] = useState(false);
 
   // Messaging
   const [msgModal, setMsgModal]   = useState(false);
@@ -359,6 +360,11 @@ export default function ProfilePage() {
   useEffect(() => {
     loadProfile();
   }, [profileId]);
+
+  // Reset broken-image flag when the avatar URL changes (e.g. after CV upload)
+  useEffect(() => {
+    setAvatarImgError(false);
+  }, [profile?.avatar_url]);
 
   async function loadProfile() {
     setLoading(true);
@@ -822,8 +828,8 @@ export default function ProfilePage() {
             <div className="w-20 h-20 rounded-2xl bg-blue-600 flex items-center justify-center text-white text-2xl font-bold overflow-hidden">
               {avatarPreview
                 ? <img src={avatarPreview} alt="Preview" className="w-20 h-20 object-cover"/>
-                : profile.avatar_url
-                  ? <img src={profile.avatar_url} alt={displayName} className="w-20 h-20 object-cover"/>
+                : profile.avatar_url && !avatarImgError
+                  ? <img src={profile.avatar_url} alt={displayName} className="w-20 h-20 object-cover" onError={() => setAvatarImgError(true)}/>
                   : initials}
             </div>
             {/* Camera overlay — only in edit mode */}
