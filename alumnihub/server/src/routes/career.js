@@ -1,125 +1,245 @@
-const { Router } = require("express");
+const { Router }  = require("express");
 const { authenticate } = require("../middleware/auth.js");
 const { supabase } = require("../config/supabase.js");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const pdfParse = require("pdf-parse/lib/pdf-parse.js");
 const mammoth  = require("mammoth");
 const jpegJs   = require("jpeg-js");
+const zlib     = require("zlib");
 
 // ── Avatar image extraction ───────────────────────────────────────────────────
 
-// Scan a PDF buffer for all embedded JPEG streams (DCTDecode — Word, LibreOffice,
-// most PDF exporters). Then decode each candidate, convert CMYK→RGB when needed,
-// and pick the one with the highest luminance variance (= most photo-like content).
-// White/solid-color backgrounds have variance ≈ 0 and are skipped automatically.
+// Score a raw RGBA pixel buffer by luminance variance (0 = solid colour, high = photo).
+function photoVariance(rgbaData) {
+  const SAMPLES = 400;
+  const step = Math.max(1, Math.floor(rgbaData.length / 4 / SAMPLES)) * 4;
+  let sum = 0, count = 0;
+  for (let i = 0; i < rgbaData.length; i += step) {
+    sum += 0.299 * rgbaData[i] + 0.587 * rgbaData[i + 1] + 0.114 * rgbaData[i + 2];
+    count++;
+  }
+  if (!count) return 0;
+  const mean = sum / count;
+  let v = 0;
+  for (let i = 0; i < rgbaData.length; i += step) {
+    const lum = 0.299 * rgbaData[i] + 0.587 * rgbaData[i + 1] + 0.114 * rgbaData[i + 2];
+    v += (lum - mean) ** 2;
+  }
+  return v / count;
+}
+
+// Convert raw pixels (RGB/Gray/CMYK) to RGBA Buffer.
+function toRGBA(pixels, channels) {
+  const n = pixels.length / channels;
+  const out = Buffer.alloc(n * 4);
+  for (let i = 0, j = 0; i < pixels.length; i += channels, j += 4) {
+    if (channels === 3) {
+      out[j] = pixels[i]; out[j + 1] = pixels[i + 1]; out[j + 2] = pixels[i + 2]; out[j + 3] = 255;
+    } else if (channels === 1) {
+      out[j] = out[j + 1] = out[j + 2] = pixels[i]; out[j + 3] = 255;
+    } else if (channels === 4) {
+      // CMYK → RGB
+      const c = pixels[i] / 255, m = pixels[i + 1] / 255, y = pixels[i + 2] / 255, k = pixels[i + 3] / 255;
+      out[j]     = Math.round(255 * (1 - c) * (1 - k));
+      out[j + 1] = Math.round(255 * (1 - m) * (1 - k));
+      out[j + 2] = Math.round(255 * (1 - y) * (1 - k));
+      out[j + 3] = 255;
+    }
+  }
+  return out;
+}
+
+// Undo PNG row-filter prediction (PDF /Predictor 10-15) applied to FlateDecode streams.
+function undoPNGPredictor(data, width, channels) {
+  const rowBytes = width * channels;
+  const stride   = rowBytes + 1; // 1 filter byte per row
+  const rows     = Math.floor(data.length / stride);
+  const out      = Buffer.alloc(rows * rowBytes);
+  for (let row = 0; row < rows; row++) {
+    const filter  = data[row * stride];
+    const inBase  = row * stride + 1;
+    const outBase = row * rowBytes;
+    const prevBase = (row - 1) * rowBytes;
+    for (let i = 0; i < rowBytes; i++) {
+      const raw = data[inBase + i];
+      const a   = i >= channels ? out[outBase + i - channels] : 0;
+      const b   = row > 0 ? out[prevBase + i] : 0;
+      const c   = (row > 0 && i >= channels) ? out[prevBase + i - channels] : 0;
+      let val;
+      switch (filter) {
+        case 0: val = raw; break;
+        case 1: val = (raw + a) & 0xFF; break;
+        case 2: val = (raw + b) & 0xFF; break;
+        case 3: val = (raw + Math.floor((a + b) / 2)) & 0xFF; break;
+        case 4: {
+          const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+          val = (raw + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c)) & 0xFF;
+          break;
+        }
+        default: return null;
+      }
+      out[outBase + i] = val;
+    }
+  }
+  return out;
+}
+
+// Extract images from a PDF using two strategies:
+//  1. DCTDecode (raw JPEG) — valid JPEG must start FF D8 FF
+//  2. FlateDecode — decompress zlib stream and reconstruct pixel data
+// Picks the image with the highest luminance variance (most photo-like).
 // Returns { data: Buffer, mime: "image/jpeg" } or null.
 function extractProfileImageFromPDF(buffer) {
-  // ── Step 1: collect all JPEG blobs (FF D8 … FF D9) ──
-  const candidates = [];
-  let offset = 0;
-  const EOI = Buffer.from([0xFF, 0xD9]);
-  while (offset < buffer.length - 3) {
-    if (buffer[offset] === 0xFF && buffer[offset + 1] === 0xD8) {
-      const end = buffer.indexOf(EOI, offset + 2);
-      if (end !== -1) {
-        const len = end + 2 - offset;
-        if (len > 3000) candidates.push(buffer.slice(offset, end + 2));
-        offset = end + 2;
-        continue;
+  const pixelCandidates = []; // { rgba: Buffer, width, height, label }
+
+  // ── Strategy 1: DCTDecode / raw JPEG streams ──────────────────────────────
+  // Require FF D8 FF (3rd byte must be FF) to filter out coincidental matches
+  // in compressed binary data (which caused 39 false positives before).
+  {
+    let off = 0;
+    const EOI = Buffer.from([0xFF, 0xD9]);
+    while (off < buffer.length - 3) {
+      if (buffer[off] === 0xFF && buffer[off + 1] === 0xD8 && buffer[off + 2] === 0xFF) {
+        const end = buffer.indexOf(EOI, off + 2);
+        if (end !== -1 && end - off > 3000) {
+          const blob = buffer.slice(off, end + 2);
+          try {
+            const dec = jpegJs.decode(blob, { maxResolutionInMP: 25, colorTransform: false });
+            // Detect CMYK via SOF component count
+            let isCmyk = false;
+            let si = 2;
+            while (si + 3 < blob.length) {
+              if (blob[si] !== 0xFF) { si++; continue; }
+              const mk = blob[si + 1];
+              if (mk === 0xD9 || mk === 0xDA) break;
+              if (mk === 0xD8 || (mk >= 0xD0 && mk <= 0xD7) || mk === 0x01) { si += 2; continue; }
+              if (si + 3 >= blob.length) break;
+              const sl = (blob[si + 2] << 8) | blob[si + 3];
+              if (sl < 2) break;
+              if ((mk >= 0xC0 && mk <= 0xCF) && mk !== 0xC4 && mk !== 0xC8 && mk !== 0xCC) {
+                if (si + 9 < blob.length) isCmyk = blob[si + 9] === 4;
+                break;
+              }
+              si += 2 + sl;
+            }
+            const rgba = isCmyk ? toRGBA(dec.data, 4) : dec.data;
+            pixelCandidates.push({ rgba, width: dec.width, height: dec.height, label: `DCT ${blob.length}B` });
+          } catch { /* not a valid JPEG */ }
+          off = end + 2;
+          continue;
+        }
       }
+      off++;
     }
-    offset++;
-  }
-  console.log(`[Avatar] Raw scan: ${candidates.length} JPEG candidate(s) found in PDF`);
-  if (candidates.length === 0) return null;
-
-  // ── Step 2: decode each candidate, score by luminance variance ──
-  // Headshots have lots of color variation (face, hair, clothing, background).
-  // Solid white backgrounds have variance ≈ 0.
-  let bestResult = null;
-  let bestScore  = -1;
-
-  for (let ci = 0; ci < candidates.length; ci++) {
-    const blob = candidates[ci];
-    try {
-      // colorTransform:false keeps raw channel values (important for CMYK detection)
-      const decoded = jpegJs.decode(blob, { maxResolutionInMP: 25, colorTransform: false });
-      const { data, width, height } = decoded;
-
-      // ── Step 2a: CMYK → RGB conversion when needed ──
-      // jpeg-js with colorTransform:false for a CMYK JPEG returns C,M,Y,K in the R,G,B,A slots.
-      // We detect this by checking if the JPEG SOF marker reports 4 components.
-      let rgbaData = data;
-      let isCmyk = false;
-      {
-        // Parse SOF from the blob to get nComponents
-        let i = 2;
-        while (i + 3 < blob.length) {
-          if (blob[i] !== 0xFF) { i++; continue; }
-          const mk = blob[i + 1];
-          if (mk === 0xD9 || mk === 0xDA) break; // EOI or SOS
-          if (mk === 0xD8 || mk === 0xD9 || (mk >= 0xD0 && mk <= 0xD7) || mk === 0x01) { i += 2; continue; }
-          if (i + 3 >= blob.length) break;
-          const sLen = (blob[i + 2] << 8) | blob[i + 3];
-          if (sLen < 2) break;
-          if ((mk >= 0xC0 && mk <= 0xCF) && mk !== 0xC4 && mk !== 0xC8 && mk !== 0xCC) {
-            if (i + 9 < blob.length) isCmyk = blob[i + 9] === 4;
-            break;
-          }
-          i += 2 + sLen;
-        }
-      }
-
-      if (isCmyk) {
-        // Convert CMYK (stored in R,G,B,A slots by jpeg-js) → RGBA
-        const out = Buffer.alloc(data.length);
-        for (let i = 0; i < data.length; i += 4) {
-          const c = data[i] / 255, m = data[i + 1] / 255;
-          const y = data[i + 2] / 255, k = data[i + 3] / 255;
-          out[i]     = Math.round(255 * (1 - c) * (1 - k));
-          out[i + 1] = Math.round(255 * (1 - m) * (1 - k));
-          out[i + 2] = Math.round(255 * (1 - y) * (1 - k));
-          out[i + 3] = 255;
-        }
-        rgbaData = out;
-      }
-
-      // ── Step 2b: sample luminance variance ──
-      const SAMPLES = 400;
-      const step = Math.max(1, Math.floor(rgbaData.length / 4 / SAMPLES)) * 4;
-      let sum = 0, count = 0;
-      for (let i = 0; i < rgbaData.length; i += step) {
-        sum += 0.299 * rgbaData[i] + 0.587 * rgbaData[i + 1] + 0.114 * rgbaData[i + 2];
-        count++;
-      }
-      const mean = sum / count;
-      let variance = 0;
-      for (let i = 0; i < rgbaData.length; i += step) {
-        const lum = 0.299 * rgbaData[i] + 0.587 * rgbaData[i + 1] + 0.114 * rgbaData[i + 2];
-        variance += (lum - mean) ** 2;
-      }
-      variance /= count;
-
-      console.log(`[Avatar] Candidate ${ci + 1}: ${blob.length}B ${width}×${height} cmyk=${isCmyk} variance=${variance.toFixed(0)}`);
-
-      if (variance > bestScore) {
-        bestScore = variance;
-        // Build the final JPEG to store: re-encode CMYK→RGB; keep others as-is
-        if (isCmyk) {
-          const encoded = jpegJs.encode({ data: rgbaData, width, height }, 88);
-          bestResult = Buffer.from(encoded.data);
-        } else {
-          bestResult = blob;
-        }
-      }
-    } catch (err) {
-      console.log(`[Avatar] Candidate ${ci + 1}: decode failed — ${err.message}`);
-    }
+    console.log(`[Avatar] DCTDecode pass: ${pixelCandidates.length} valid JPEG(s)`);
   }
 
-  if (!bestResult) { console.log("[Avatar] No decodable JPEG found"); return null; }
-  console.log(`[Avatar] Best candidate score=${bestScore.toFixed(0)}, size=${bestResult.length}B`);
-  return { data: bestResult, mime: "image/jpeg" };
+  // ── Strategy 2: FlateDecode image streams ────────────────────────────────
+  // Parse PDF stream dictionaries, find image XObjects with FlateDecode filter,
+  // decompress with zlib, handle PNG predictor if present.
+  {
+    const str = buffer.toString("binary"); // latin1 preserves byte values
+    let pos = 0;
+    let flateFound = 0;
+    while (pos < str.length) {
+      // Every stream is preceded by its dictionary ending with >>
+      const sIdx = str.indexOf("stream", pos);
+      if (sIdx < 0) break;
+      // 'stream' must be preceded by \n or \r (i.e. it's a keyword, not part of text)
+      const pre = str[sIdx - 1];
+      if (pre !== "\n" && pre !== "\r") { pos = sIdx + 6; continue; }
+
+      // Find the dictionary immediately before this 'stream'
+      let dEnd = sIdx - 1;
+      while (dEnd > 0 && (str[dEnd] === "\r" || str[dEnd] === "\n" || str[dEnd] === " ")) dEnd--;
+      if (str[dEnd] !== ">" || str[dEnd - 1] !== ">") { pos = sIdx + 6; continue; }
+      const dStart = str.lastIndexOf("<<", dEnd);
+      if (dStart < 0 || dEnd - dStart > 3000) { pos = sIdx + 6; continue; }
+      const dict = str.slice(dStart, dEnd + 1);
+
+      // Must be an Image XObject with a FlateDecode filter
+      if (!(/\/Subtype\s*\/Image/.test(dict))) { pos = sIdx + 6; continue; }
+      if (!(/\/FlateDecode/.test(dict) || /\/Fl\b/.test(dict))) { pos = sIdx + 6; continue; }
+
+      // Extract dimensions and length
+      const wm = dict.match(/\/Width\s+(\d+)/);
+      const hm = dict.match(/\/Height\s+(\d+)/);
+      const lm = dict.match(/\/Length\s+(\d+)/);
+      if (!wm || !hm || !lm) { pos = sIdx + 6; continue; }
+      const w = +wm[1], h = +hm[1], streamLen = +lm[1];
+      if (w < 50 || h < 50 || w > 4000 || h > 4000) { pos = sIdx + 6; continue; }
+
+      // Stream data starts after 'stream' + \r?\n
+      let sStart = sIdx + 6;
+      if (str[sStart] === "\r") sStart++;
+      if (str[sStart] === "\n") sStart++;
+      if (sStart + streamLen > buffer.length) { pos = sIdx + 6; continue; }
+
+      try {
+        const compressed = buffer.slice(sStart, sStart + streamLen);
+        let raw = zlib.inflateSync(compressed);
+
+        // Handle PNG row predictor (/Predictor >= 10)
+        const pm = dict.match(/\/Predictor\s+(\d+)/);
+        if (pm && +pm[1] >= 10) {
+          const isGray = /DeviceGray/.test(dict);
+          const isCmyk = /DeviceCMYK/.test(dict);
+          const ch     = isCmyk ? 4 : isGray ? 1 : 3;
+          const fixed  = undoPNGPredictor(raw, w, ch);
+          if (!fixed) { pos = sStart + streamLen; continue; }
+          raw = fixed;
+        }
+
+        // Determine colour space → channels
+        const isGray = /DeviceGray/.test(dict);
+        const isCmyk = /DeviceCMYK/.test(dict);
+        const ch     = isCmyk ? 4 : isGray ? 1 : 3;
+        if (raw.length < w * h * ch * 0.9) { pos = sStart + streamLen; continue; }
+
+        const rgba = toRGBA(raw.slice(0, w * h * ch), ch);
+        pixelCandidates.push({ rgba, width: w, height: h, label: `Flate ${w}×${h}` });
+        flateFound++;
+      } catch { /* inflate failed — not a valid stream */ }
+
+      pos = sStart + streamLen;
+    }
+    console.log(`[Avatar] FlateDecode pass: ${flateFound} image stream(s) decoded`);
+  }
+
+  if (pixelCandidates.length === 0) { console.log("[Avatar] No decodable image found in PDF"); return null; }
+
+  // ── Pick the most photo-like candidate by luminance variance ──────────────
+  let bestRGBA = null, bestW = 0, bestH = 0, bestScore = -1;
+  for (const c of pixelCandidates) {
+    const v = photoVariance(c.rgba);
+    console.log(`[Avatar] ${c.label}: ${c.width}×${c.height} variance=${v.toFixed(0)}`);
+    if (v > bestScore) { bestScore = v; bestRGBA = c.rgba; bestW = c.width; bestH = c.height; }
+  }
+
+  const encoded = jpegJs.encode({ data: bestRGBA, width: bestW, height: bestH }, 88);
+  const out = Buffer.from(encoded.data);
+  console.log(`[Avatar] Selected score=${bestScore.toFixed(0)} → ${out.length}B JPEG`);
+  return { data: out, mime: "image/jpeg" };
+}
+
+// Extract the largest embedded image from a DOCX buffer via mammoth's image handler.
+// Returns { data: Buffer, mime: string } or null.
+async function extractProfileImageFromDOCX(buffer) {
+  const images = [];
+  await mammoth.convertToHtml({ buffer }, {
+    convertImage: mammoth.images.imgElement((image) =>
+      image.read("buffer").then((buf) => {
+        images.push({ data: buf, mime: image.contentType || "image/jpeg" });
+        return { src: "" };
+      })
+    ),
+  });
+  if (images.length === 0) { console.log("[Avatar] DOCX: no images found"); return null; }
+  // Pick largest by byte size — headshot photos are typically larger than diagrams/icons
+  images.sort((a, b) => b.data.length - a.data.length);
+  const best = images[0];
+  console.log(`[Avatar] DOCX: ${images.length} image(s) found, using ${best.mime} ${best.data.length}B`);
+  return best;
 }
 
 async function extractTextFromBuffer(buffer, mimeType) {
@@ -485,11 +605,15 @@ router.post("/upload-cv", authenticate, async (req, res, next) => {
       newStatus = aiError.message;
     }
 
-    // ── Extract & upload profile photo from PDF (best-effort) ──
+    // ── Extract & upload profile photo from CV (best-effort) ──
+    const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     let extractedAvatarUrl = null;
-    if (mimeType === "application/pdf") {
+    const isExtractable = mimeType === "application/pdf" || mimeType === DOCX_MIME;
+    if (isExtractable) {
       try {
-        const imageResult = await extractProfileImageFromPDF(fileBuffer);
+        const imageResult = mimeType === "application/pdf"
+          ? extractProfileImageFromPDF(fileBuffer)
+          : await extractProfileImageFromDOCX(fileBuffer);
         if (imageResult) {
           const ext = imageResult.mime === "image/png" ? "png" : "jpg";
           const avatarPath = `avatars/${req.user.id}/${Date.now()}_avatar.${ext}`;
