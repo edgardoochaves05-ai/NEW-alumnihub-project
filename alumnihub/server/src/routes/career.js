@@ -9,23 +9,49 @@ const zlib     = require("zlib");
 
 // ── Avatar image extraction ───────────────────────────────────────────────────
 
-// Score a raw RGBA pixel buffer by luminance variance (0 = solid colour, high = photo).
-function photoVariance(rgbaData) {
-  const SAMPLES = 400;
-  const step = Math.max(1, Math.floor(rgbaData.length / 4 / SAMPLES)) * 4;
-  let sum = 0, count = 0;
+// Score a candidate image for how likely it is to be a headshot photo.
+// Combines three signals:
+//   1. Luminance variance  — separates photos from solid fills
+//   2. Color diversity     — photos have many distinct colors; monochrome stripes score low
+//   3. Skin-tone ratio     — headshots contain face/hands; decorative elements do not
+// Also applies an aspect-ratio penalty: landscape banners (wide headers, decorative strips)
+// have ratio >> 1, while headshots are square or gently portrait.
+function photoScore(rgbaData, width, height) {
+  const ratio = width / height;
+  // Strong penalty for decorative banners (very wide) or thin slices (very tall)
+  const aspectFactor = ratio > 3.0 ? 0.05 : ratio > 2.0 ? 0.25 : ratio > 1.6 ? 0.55 : ratio < 0.2 ? 0.05 : 1.0;
+
+  const SAMPLES = 500;
+  const step = Math.max(4, Math.floor(rgbaData.length / 4 / SAMPLES) * 4);
+  let sum = 0, count = 0, skinPixels = 0;
+  const colorBuckets = new Set();
+
   for (let i = 0; i < rgbaData.length; i += step) {
-    sum += 0.299 * rgbaData[i] + 0.587 * rgbaData[i + 1] + 0.114 * rgbaData[i + 2];
+    const r = rgbaData[i], g = rgbaData[i + 1], b = rgbaData[i + 2];
+    sum += 0.299 * r + 0.587 * g + 0.114 * b;
     count++;
+    // 3-bit bucket per channel → max 512 unique colors
+    colorBuckets.add(((r >> 5) << 6) | ((g >> 5) << 3) | (b >> 5));
+    // Skin tone: R dominant, not too dark, not pure grey
+    if (r > 95 && g > 40 && b > 20 && r > g && r > b && r - g > 10 &&
+        Math.max(r, g, b) - Math.min(r, g, b) > 15) skinPixels++;
   }
   if (!count) return 0;
+
   const mean = sum / count;
-  let v = 0;
+  let variance = 0;
   for (let i = 0; i < rgbaData.length; i += step) {
     const lum = 0.299 * rgbaData[i] + 0.587 * rgbaData[i + 1] + 0.114 * rgbaData[i + 2];
-    v += (lum - mean) ** 2;
+    variance += (lum - mean) ** 2;
   }
-  return v / count;
+  variance /= count;
+
+  // colorBuckets: ~5-20 for grey stripes/gradients, 80-300+ for real photos
+  const colorDiversity = colorBuckets.size;
+  // skinBonus: scales up when a meaningful fraction of pixels are skin-toned
+  const skinBonus = (skinPixels / count) * 3000;
+
+  return aspectFactor * (variance + colorDiversity * 20 + skinBonus);
 }
 
 // Convert raw pixels (RGB/Gray/CMYK) to RGBA Buffer.
@@ -328,12 +354,12 @@ function extractProfileImageFromPDF(buffer) {
 
   if (pixelCandidates.length === 0) { console.log("[Avatar] No decodable image found in PDF"); return null; }
 
-  // ── Pick the most photo-like candidate by luminance variance ──────────────
+  // ── Pick the most headshot-like candidate ────────────────────────────────
   let bestRGBA = null, bestW = 0, bestH = 0, bestScore = -1;
   for (const c of pixelCandidates) {
-    const v = photoVariance(c.rgba);
-    console.log(`[Avatar] ${c.label}: ${c.width}×${c.height} variance=${v.toFixed(0)}`);
-    if (v > bestScore) { bestScore = v; bestRGBA = c.rgba; bestW = c.width; bestH = c.height; }
+    const score = photoScore(c.rgba, c.width, c.height);
+    console.log(`[Avatar] ${c.label}: ${c.width}×${c.height} score=${score.toFixed(0)}`);
+    if (score > bestScore) { bestScore = score; bestRGBA = c.rgba; bestW = c.width; bestH = c.height; }
   }
 
   const encoded = jpegJs.encode({ data: bestRGBA, width: bestW, height: bestH }, 88);
@@ -395,10 +421,24 @@ async function extractProfileImageFromDOCX(buffer) {
   const zipImages = extractImagesFromDOCXZip(buffer);
   console.log(`[Avatar] DOCX ZIP scan: ${zipImages.length} image(s) in word/media/`);
   if (zipImages.length > 0) {
-    zipImages.sort((a, b) => b.data.length - a.data.length);
-    const best = zipImages[0];
-    console.log(`[Avatar] DOCX: using ${best.name} (${best.mime}, ${best.data.length}B)`);
-    return best;
+    // Score each image using the same headshot-heuristic as the PDF path.
+    // For JPEG images we can decode and score properly; for others fall back to file size.
+    let bestImg = null, bestScore = -1;
+    for (const img of zipImages) {
+      let score = img.data.length / 1000; // default: larger = better
+      if (img.mime === 'image/jpeg' || img.mime === 'image/jpg') {
+        try {
+          const dec = jpegJs.decode(img.data, { maxResolutionInMP: 25, colorTransform: false });
+          score = photoScore(dec.data, dec.width, dec.height);
+          console.log(`[Avatar] DOCX ${img.name}: ${dec.width}×${dec.height} score=${score.toFixed(0)}`);
+        } catch { /* use size fallback */ }
+      } else {
+        console.log(`[Avatar] DOCX ${img.name}: ${img.mime} ${img.data.length}B (size score)`);
+      }
+      if (score > bestScore) { bestScore = score; bestImg = img; }
+    }
+    console.log(`[Avatar] DOCX: selected ${bestImg.name}`);
+    return bestImg;
   }
 
   // Fallback: mammoth (handles edge cases where ZIP scan misses embedded images)
