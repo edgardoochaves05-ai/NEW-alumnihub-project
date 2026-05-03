@@ -6,9 +6,11 @@ const { computeJobMatches } = require("../services/ai/index.js");
 const router = Router();
 
 // ── Get all active jobs ──
+// Default: only approved jobs. Admins can pass ?status=pending|declined|all
+// to inspect the moderation queue.
 router.get("/", authenticate, async (req, res, next) => {
   try {
-    const { industry, job_type, experience_level, search, page = 1, limit = 20 } = req.query;
+    const { industry, job_type, experience_level, search, status, page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
 
     let query = supabase
@@ -17,6 +19,13 @@ router.get("/", authenticate, async (req, res, next) => {
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
+
+    const isAdmin = req.profile?.role === "admin";
+    if (isAdmin && status) {
+      if (status !== "all") query = query.eq("status", status);
+    } else {
+      query = query.eq("status", "approved");
+    }
 
     if (industry) query = query.eq("industry", industry);
     if (job_type) query = query.eq("job_type", job_type);
@@ -37,8 +46,9 @@ router.get("/matched", authenticate, async (req, res, next) => {
   try {
     let { data, error } = await supabase
       .from("job_match_scores")
-      .select("*, job_listings(*, profiles!posted_by(id, first_name, last_name, role, avatar_url))")
+      .select("*, job_listings!inner(*, profiles!posted_by(id, first_name, last_name, role, avatar_url))")
       .eq("profile_id", req.user.id)
+      .eq("job_listings.status", "approved")
       .order("match_score", { ascending: false })
       .limit(20);
 
@@ -49,8 +59,9 @@ router.get("/matched", authenticate, async (req, res, next) => {
       await computeJobMatches(req.user.id);
       const { data: fresh, error: freshError } = await supabase
         .from("job_match_scores")
-        .select("*, job_listings(*, profiles!posted_by(id, first_name, last_name, role, avatar_url))")
+        .select("*, job_listings!inner(*, profiles!posted_by(id, first_name, last_name, role, avatar_url))")
         .eq("profile_id", req.user.id)
+        .eq("job_listings.status", "approved")
         .order("match_score", { ascending: false })
         .limit(20);
       if (freshError) throw freshError;
@@ -121,9 +132,13 @@ router.get("/:id", authenticate, async (req, res, next) => {
   }
 });
 
-// ── Create job ──
+// ── Create job ── (admins cannot post — they only moderate)
 router.post("/", authenticate, async (req, res, next) => {
   try {
+    if (req.profile?.role === "admin") {
+      return res.status(403).json({ error: "Admins cannot post jobs. Admins moderate listings only." });
+    }
+
     const {
       title, company, description, requirements, location,
       job_type, industry, salary_min, salary_max, salary_currency,
@@ -134,6 +149,7 @@ router.post("/", authenticate, async (req, res, next) => {
       posted_by: req.user.id,
       title, company, description, requirements, location,
       job_type, industry, experience_level, application_url, application_email,
+      status: "pending",
       ...(salary_currency && { salary_currency }),
       ...(salary_min !== "" && salary_min != null && { salary_min: parseFloat(salary_min) }),
       ...(salary_max !== "" && salary_max != null && { salary_max: parseFloat(salary_max) }),
@@ -147,6 +163,45 @@ router.post("/", authenticate, async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// ── Approve a pending job (admin only) ──
+router.patch("/:id/approve", authenticate, authorize("admin"), async (req, res, next) => {
+  try {
+    const { data, error } = await supabase
+      .from("job_listings")
+      .update({
+        status: "approved",
+        reviewed_by: req.user.id,
+        reviewed_at: new Date().toISOString(),
+        decline_reason: null,
+      })
+      .eq("id", req.params.id)
+      .select()
+      .single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) { next(err); }
+});
+
+// ── Decline a pending job (admin only) ──
+router.patch("/:id/decline", authenticate, authorize("admin"), async (req, res, next) => {
+  try {
+    const { reason } = req.body || {};
+    const { data, error } = await supabase
+      .from("job_listings")
+      .update({
+        status: "declined",
+        reviewed_by: req.user.id,
+        reviewed_at: new Date().toISOString(),
+        decline_reason: reason || null,
+      })
+      .eq("id", req.params.id)
+      .select()
+      .single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) { next(err); }
 });
 
 // ── Update job ──
