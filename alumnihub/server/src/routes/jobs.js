@@ -41,6 +41,26 @@ router.get("/", authenticate, async (req, res, next) => {
   }
 });
 
+// ── Get my own job postings (any status) ──
+// Used by the poster's "My Listings" view so they can see pending /
+// declined jobs that are hidden from the public feed.
+router.get("/mine", authenticate, async (req, res, next) => {
+  try {
+    const { status } = req.query;
+    let query = supabase
+      .from("job_listings")
+      .select("*, profiles!posted_by(id, first_name, last_name, role, avatar_url)")
+      .eq("posted_by", req.user.id)
+      .order("created_at", { ascending: false });
+
+    if (status && status !== "all") query = query.eq("status", status);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) { next(err); }
+});
+
 // ── Get matched jobs (AI) ──
 router.get("/matched", authenticate, async (req, res, next) => {
   try {
@@ -126,6 +146,14 @@ router.get("/:id", authenticate, async (req, res, next) => {
       .single();
 
     if (error) throw error;
+
+    // Hide non-approved listings from anyone other than the owner or an admin
+    const isOwner = data?.posted_by === req.user.id;
+    const isAdmin = req.profile?.role === "admin";
+    if (data?.status !== "approved" && !isOwner && !isAdmin) {
+      return res.status(404).json({ error: "Job not found" });
+    }
+
     res.json(data);
   } catch (err) {
     next(err);
@@ -205,11 +233,38 @@ router.patch("/:id/decline", authenticate, authorize("admin"), async (req, res, 
 });
 
 // ── Update job ──
+// When the original poster edits a declined listing it goes back into the
+// admin's pending queue automatically. Admins editing a job do not change
+// its status (they only moderate via /approve and /decline).
 router.put("/:id", authenticate, async (req, res, next) => {
   try {
+    const { data: existing, error: fetchErr } = await supabase
+      .from("job_listings")
+      .select("posted_by, status")
+      .eq("id", req.params.id)
+      .single();
+    if (fetchErr) throw fetchErr;
+
+    const isOwner = existing.posted_by === req.user.id;
+    const isAdmin = req.profile?.role === "admin";
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: "You can only edit your own job listings." });
+    }
+
+    // Strip moderation fields from the client payload — these are server-managed.
+    const { status, reviewed_by, reviewed_at, decline_reason, posted_by, ...payload } = req.body || {};
+
+    // Owner editing a declined listing → resubmit for review.
+    if (isOwner && existing.status === "declined") {
+      payload.status = "pending";
+      payload.reviewed_by = null;
+      payload.reviewed_at = null;
+      payload.decline_reason = null;
+    }
+
     const { data, error } = await supabase
       .from("job_listings")
-      .update(req.body)
+      .update(payload)
       .eq("id", req.params.id)
       .select()
       .single();
@@ -224,6 +279,19 @@ router.put("/:id", authenticate, async (req, res, next) => {
 // ── Delete job ──
 router.delete("/:id", authenticate, async (req, res, next) => {
   try {
+    const { data: existing, error: fetchErr } = await supabase
+      .from("job_listings")
+      .select("posted_by")
+      .eq("id", req.params.id)
+      .single();
+    if (fetchErr) throw fetchErr;
+
+    const isOwner = existing.posted_by === req.user.id;
+    const isAdmin = req.profile?.role === "admin";
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: "You can only delete your own job listings." });
+    }
+
     const { error } = await supabase.from("job_listings").delete().eq("id", req.params.id);
     if (error) throw error;
     res.json({ message: "Job deleted" });

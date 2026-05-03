@@ -10,6 +10,7 @@ import {
   ChevronLeft, ChevronRight, Loader2, Sparkles, ExternalLink,
   BookmarkPlus, Calendar, GraduationCap, User, Mail,
   ChevronDown, ChevronUp, Eye, Send, CheckCircle2, XCircle, Trash2, ShieldCheck, Clock3,
+  Pencil, AlertTriangle, RefreshCw,
 } from "lucide-react";
 import JobMatchAnalytics from "../components/JobMatchAnalytics";
 
@@ -398,13 +399,35 @@ function JobDetailModal({ job, matchScore, profile, onClose }) {
   );
 }
 
-// ── Post Job Modal ─────────────────────────────────────────────
-function PostJobModal({ onClose, onCreated }) {
-  const [form, setForm] = useState({
-    title:"", company:"", location:"", industry:"", job_type:"full-time",
-    experience_level:"entry", salary_min:"", salary_max:"",
-    description:"", requirements:"", application_url:"", application_email:"", expires_at:"",
-  });
+// ── Job Form Modal (shared for create + edit) ──────────────────
+function JobFormModal({ onClose, onSaved, existing }) {
+  const isEdit       = !!existing;
+  const isResubmit   = isEdit && existing.status === "declined";
+  const toDateInput  = (v) => (v ? String(v).slice(0, 10) : "");
+
+  const [form, setForm] = useState(
+    isEdit
+      ? {
+          title:             existing.title             || "",
+          company:           existing.company           || "",
+          location:          existing.location          || "",
+          industry:          existing.industry          || "",
+          job_type:          existing.job_type          || "full-time",
+          experience_level:  existing.experience_level  || "entry",
+          salary_min:        existing.salary_min ?? "",
+          salary_max:        existing.salary_max ?? "",
+          description:       existing.description       || "",
+          requirements:      existing.requirements      || "",
+          application_url:   existing.application_url   || "",
+          application_email: existing.application_email || "",
+          expires_at:        toDateInput(existing.expires_at),
+        }
+      : {
+          title:"", company:"", location:"", industry:"", job_type:"full-time",
+          experience_level:"entry", salary_min:"", salary_max:"",
+          description:"", requirements:"", application_url:"", application_email:"", expires_at:"",
+        }
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState("");
 
@@ -415,26 +438,43 @@ function PostJobModal({ onClose, onCreated }) {
     if (!form.title || !form.company) { setError("Title and company are required."); return; }
     setSaving(true);
     try {
-      const { data } = await api.post("/jobs", form);
-      onCreated(data);
+      const { data } = isEdit
+        ? await api.put(`/jobs/${existing.id}`, form)
+        : await api.post("/jobs", form);
+      onSaved(data);
     } catch(err) {
-      const errorMsg = err.response?.data?.error || "Failed to post job.";
-      setError(typeof errorMsg === 'string' ? errorMsg : errorMsg.message || "Failed to post job.");
+      const errorMsg = err.response?.data?.error || "Failed to save job.";
+      setError(typeof errorMsg === 'string' ? errorMsg : errorMsg.message || "Failed to save job.");
     } finally { setSaving(false); }
   }
+
+  const title       = isEdit ? (isResubmit ? "Revise & Resubmit" : "Edit Job Listing") : "Post a Job";
+  const submitLabel = isEdit ? (isResubmit ? "Resubmit for Review" : "Save Changes")   : "Submit for Review";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
-          <h2 className="text-lg font-bold text-gray-900">Post a Job</h2>
+          <h2 className="text-lg font-bold text-gray-900">{title}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20}/></button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && <div className="px-4 py-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg">{error}</div>}
+          {isResubmit && existing.decline_reason && (
+            <div className="px-4 py-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg flex items-start gap-2">
+              <AlertTriangle size={14} className="mt-0.5 flex-shrink-0"/>
+              <span><strong>Admin decline reason:</strong> {existing.decline_reason}</span>
+            </div>
+          )}
           <div className="px-4 py-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-lg flex items-start gap-2">
             <ShieldCheck size={14} className="mt-0.5 flex-shrink-0"/>
-            <span>Job listings are reviewed by an admin before they appear publicly.</span>
+            <span>
+              {isResubmit
+                ? "Saving will resend this listing to the admin for review."
+                : isEdit
+                  ? "Edits to a pending listing keep it in the admin queue."
+                  : "Job listings are reviewed by an admin before they appear publicly."}
+            </span>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
@@ -500,10 +540,66 @@ function PostJobModal({ onClose, onCreated }) {
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancel</button>
             <button type="submit" disabled={saving} className="btn-primary flex-1 flex items-center justify-center gap-2">
-              {saving && <Loader2 size={14} className="animate-spin"/>} Submit for Review
+              {saving && <Loader2 size={14} className="animate-spin"/>} {submitLabel}
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// ── My Listing Card (poster's pending/declined queue) ──────────
+function MyListingCard({ job, onEdit, onDelete, busyId }) {
+  const isBusy   = busyId === job.id;
+  const declined = job.status === "declined";
+  return (
+    <div className={`bg-white rounded-xl shadow-sm border overflow-hidden ${
+      declined ? "border-red-200" : "border-amber-200"
+    }`}>
+      <div className="p-5 flex flex-col gap-1.5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <h3 className="font-semibold text-gray-900 text-sm leading-snug">{job.title}</h3>
+              <StatusBadge status={job.status}/>
+            </div>
+            <div className="flex items-center gap-1 text-xs text-gray-600">
+              <Building2 size={12}/><span className="font-medium">{job.company}</span>
+            </div>
+            {job.location && (
+              <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
+                <MapPin size={11}/>{job.location}
+              </div>
+            )}
+          </div>
+          <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+            <Briefcase size={18} className="text-blue-600"/>
+          </div>
+        </div>
+        {declined && job.decline_reason && (
+          <div className="mt-2 px-3 py-2 bg-red-50 border border-red-100 rounded-lg text-xs text-red-700 flex items-start gap-2">
+            <AlertTriangle size={12} className="mt-0.5 flex-shrink-0"/>
+            <span><strong>Reason:</strong> {job.decline_reason}</span>
+          </div>
+        )}
+      </div>
+      <div className="border-t border-gray-100 p-3 flex flex-wrap gap-2 bg-gray-50/60">
+        <button
+          onClick={() => onEdit(job)}
+          disabled={isBusy}
+          className="btn-primary flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 text-xs py-1.5 px-2 disabled:opacity-50"
+        >
+          {declined ? <RefreshCw size={13}/> : <Pencil size={13}/>}
+          {declined ? "Revise & Resubmit" : "Edit"}
+        </button>
+        <button
+          onClick={() => onDelete(job)}
+          disabled={isBusy}
+          className="inline-flex items-center justify-center gap-1.5 text-xs py-1.5 px-2 rounded-lg border border-red-200 text-red-600 bg-white hover:bg-red-50 disabled:opacity-50"
+        >
+          <Trash2 size={13}/> Delete
+        </button>
       </div>
     </div>
   );
@@ -531,6 +627,9 @@ export default function JobsPage() {
   const [adminTab, setAdminTab]       = useState("approved"); // approved | pending
   const [pendingCount, setPendingCount] = useState(0);
   const [busyId, setBusyId]           = useState(null);
+  const [myListings, setMyListings]   = useState([]);  // poster's pending + declined
+  const [showMyListings, setShowMyListings] = useState(false);
+  const [editingJob, setEditingJob]   = useState(null);
   const debounceRef = useRef(null);
 
   const top10Ids = useMemo(() => {
@@ -577,6 +676,21 @@ export default function JobsPage() {
       setPendingCount(data.total || 0);
     }).catch(() => {});
   }, [isAdmin, jobs]);
+
+  // Poster: load my pending + declined listings
+  const canPostNow = profile?.role && profile.role !== "student" && profile.role !== "admin";
+  async function loadMyListings() {
+    if (!canPostNow) return;
+    try {
+      const [{ data: pending }, { data: declined }] = await Promise.all([
+        api.get("/jobs/mine?status=pending"),
+        api.get("/jobs/mine?status=declined"),
+      ]);
+      // Declined first so the poster sees what needs revision up top
+      setMyListings([...(declined || []), ...(pending || [])]);
+    } catch { /* ignore */ }
+  }
+  useEffect(() => { loadMyListings(); /* eslint-disable-next-line */ }, [profile?.id]);
 
   async function fetchJobs() {
     setLoading(true);
@@ -625,10 +739,32 @@ export default function JobsPage() {
     try {
       await api.delete(`/jobs/${job.id}`);
       setJobs(prev => prev.filter(j => j.id !== job.id));
+      setMyListings(prev => prev.filter(j => j.id !== job.id));
       if (job.status === "pending") setPendingCount(c => Math.max(0, c - 1));
     } catch (e) {
       alert(e.response?.data?.error || "Failed to delete job.");
     } finally { setBusyId(null); }
+  }
+
+  // Apply the result of a save (create or edit) into the right buckets.
+  function handleSaved(saved) {
+    setEditingJob(null);
+    setShowPost(false);
+    if (saved.status === "approved") {
+      setJobs(prev => {
+        const others = prev.filter(j => j.id !== saved.id);
+        return [saved, ...others];
+      });
+      setMyListings(prev => prev.filter(j => j.id !== saved.id));
+    } else {
+      // pending or declined → poster's queue, not the public list
+      setJobs(prev => prev.filter(j => j.id !== saved.id));
+      setMyListings(prev => {
+        const others = prev.filter(j => j.id !== saved.id);
+        // declined first, then pending — preserve sort
+        return saved.status === "declined" ? [saved, ...others] : [...others, saved];
+      });
+    }
   }
 
   const activeFilters = [industry, jobType, expLevel].filter(Boolean).length;
@@ -782,6 +918,43 @@ export default function JobsPage() {
         )}
       </div>
 
+      {/* Poster's My Listings — pending + declined submissions */}
+      {canPost && myListings.length > 0 && (
+        <div className="card">
+          <button
+            onClick={() => setShowMyListings(v => !v)}
+            className="w-full flex items-center justify-between gap-3 text-left"
+          >
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                <ShieldCheck size={15} className="text-amber-500"/>
+                My Submissions
+                <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+                  {myListings.length}
+                </span>
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Listings awaiting admin review or returned for revision.
+              </p>
+            </div>
+            {showMyListings ? <ChevronUp size={16} className="text-gray-400"/> : <ChevronDown size={16} className="text-gray-400"/>}
+          </button>
+          {showMyListings && (
+            <div className="grid gap-3 sm:grid-cols-2 mt-4">
+              {myListings.map(job => (
+                <MyListingCard
+                  key={job.id}
+                  job={job}
+                  onEdit={setEditingJob}
+                  onDelete={handleDelete}
+                  busyId={busyId}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {hasMatches && (
         <Top10MatchChart jobs={top10Jobs} matchMap={matchMap} onJobClick={setSelectedJob}/>
       )}
@@ -896,7 +1069,10 @@ export default function JobsPage() {
         <JobDetailModal job={selectedJob} matchScore={matchMap[selectedJob.id]} profile={profile} onClose={() => setSelectedJob(null)}/>
       )}
       {showPost && (
-        <PostJobModal onClose={() => setShowPost(false)} onCreated={newJob => { setJobs(prev => [newJob, ...prev]); setShowPost(false); }}/>
+        <JobFormModal onClose={() => setShowPost(false)} onSaved={handleSaved}/>
+      )}
+      {editingJob && (
+        <JobFormModal existing={editingJob} onClose={() => setEditingJob(null)} onSaved={handleSaved}/>
       )}
     </div>
   );
