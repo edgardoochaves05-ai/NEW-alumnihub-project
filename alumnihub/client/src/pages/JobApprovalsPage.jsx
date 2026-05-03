@@ -286,27 +286,26 @@ export default function JobApprovalsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-0">
         {TABS.map(t => {
           const active = tab === t.key;
-          const colorMap = {
-            amber: active ? "bg-amber-600 text-white border-amber-600" : "border-gray-200 text-gray-700 hover:bg-gray-50",
-            green: active ? "bg-green-600 text-white border-green-600" : "border-gray-200 text-gray-700 hover:bg-gray-50",
-            red:   active ? "bg-red-600 text-white border-red-600"     : "border-gray-200 text-gray-700 hover:bg-gray-50",
-          };
-          const badgeMap = {
-            amber: active ? "bg-white text-amber-700" : "bg-amber-100 text-amber-700",
-            green: active ? "bg-white text-green-700" : "bg-green-100 text-green-700",
-            red:   active ? "bg-white text-red-700"   : "bg-red-100 text-red-700",
-          };
+          const accent = {
+            amber: { active: "border-amber-600 text-amber-700", badgeActive: "bg-amber-100 text-amber-700", badgeIdle: "bg-gray-100 text-gray-500" },
+            green: { active: "border-green-600 text-green-700", badgeActive: "bg-green-100 text-green-700", badgeIdle: "bg-gray-100 text-gray-500" },
+            red:   { active: "border-red-600 text-red-700",     badgeActive: "bg-red-100 text-red-700",     badgeIdle: "bg-gray-100 text-gray-500" },
+          }[t.color];
           return (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium border transition-colors ${colorMap[t.color]}`}
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                active
+                  ? accent.active
+                  : "border-transparent text-gray-500 hover:text-gray-800"
+              }`}
             >
               {t.label}
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${badgeMap[t.color]}`}>
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${active ? accent.badgeActive : accent.badgeIdle}`}>
                 {counts[t.key]}
               </span>
             </button>
