@@ -6,10 +6,12 @@ const { computeJobMatches } = require("../services/ai/index.js");
 const router = Router();
 
 // ── Get all active jobs ──
+// Non-admin users only see approved jobs. Admin can pass ?status=pending|approved|declined|all to filter.
 router.get("/", authenticate, async (req, res, next) => {
   try {
-    const { industry, job_type, experience_level, search, page = 1, limit = 20 } = req.query;
+    const { industry, job_type, experience_level, search, status, page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
+    const isAdmin = req.profile?.role === "admin";
 
     let query = supabase
       .from("job_listings")
@@ -17,6 +19,12 @@ router.get("/", authenticate, async (req, res, next) => {
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
+
+    if (isAdmin) {
+      if (status && status !== "all") query = query.eq("status", status);
+    } else {
+      query = query.eq("status", "approved");
+    }
 
     if (industry) query = query.eq("industry", industry);
     if (job_type) query = query.eq("job_type", job_type);
@@ -122,8 +130,13 @@ router.get("/:id", authenticate, async (req, res, next) => {
 });
 
 // ── Create job ──
+// Admins manage the platform and cannot post jobs. Posting is restricted to alumni / career advisors / faculty.
 router.post("/", authenticate, async (req, res, next) => {
   try {
+    if (req.profile?.role === "admin") {
+      return res.status(403).json({ error: "Admin accounts cannot post jobs." });
+    }
+
     const {
       title, company, description, requirements, location,
       job_type, industry, salary_min, salary_max, salary_currency,
@@ -134,6 +147,7 @@ router.post("/", authenticate, async (req, res, next) => {
       posted_by: req.user.id,
       title, company, description, requirements, location,
       job_type, industry, experience_level, application_url, application_email,
+      status: "pending",
       ...(salary_currency && { salary_currency }),
       ...(salary_min !== "" && salary_min != null && { salary_min: parseFloat(salary_min) }),
       ...(salary_max !== "" && salary_max != null && { salary_max: parseFloat(salary_max) }),
@@ -147,6 +161,45 @@ router.post("/", authenticate, async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// ── Approve job (admin only) ──
+router.patch("/:id/approve", authenticate, authorize("admin"), async (req, res, next) => {
+  try {
+    const { data, error } = await supabase
+      .from("job_listings")
+      .update({
+        status: "approved",
+        reviewed_by: req.user.id,
+        reviewed_at: new Date().toISOString(),
+        decline_reason: null,
+      })
+      .eq("id", req.params.id)
+      .select()
+      .single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) { next(err); }
+});
+
+// ── Decline job (admin only) ──
+router.patch("/:id/decline", authenticate, authorize("admin"), async (req, res, next) => {
+  try {
+    const { reason } = req.body || {};
+    const { data, error } = await supabase
+      .from("job_listings")
+      .update({
+        status: "declined",
+        reviewed_by: req.user.id,
+        reviewed_at: new Date().toISOString(),
+        decline_reason: reason || null,
+      })
+      .eq("id", req.params.id)
+      .select()
+      .single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) { next(err); }
 });
 
 // ── Update job ──

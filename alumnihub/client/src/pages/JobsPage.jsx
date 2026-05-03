@@ -344,8 +344,8 @@ function JobDetailModal({ job, matchScore, profile, onClose }) {
             </div>
           )}
 
-          {/* ── Apply buttons ── */}
-          {(job.application_url || job.application_email) && (
+          {/* ── Apply buttons (hidden for admin — admins manage the platform, not applications) ── */}
+          {!isAdmin && (job.application_url || job.application_email) && (
             <div className="flex flex-wrap gap-3 pt-2 border-t border-gray-100">
               {job.application_url && (
                 <a href={job.application_url} target="_blank" rel="noreferrer"
@@ -555,10 +555,15 @@ export default function JobsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Job Listings</h1>
           <p className="text-sm text-gray-500 mt-1">Browse opportunities and post openings for the alumni network.</p>
         </div>
-        {profile?.role !== "student" && (
+        {profile?.role !== "student" && profile?.role !== "admin" && (
           <button onClick={() => setShowPost(true)} className="btn-primary flex items-center gap-2 text-sm">
             <Plus size={15}/> Post a Job
           </button>
+        )}
+        {profile?.role === "admin" && (
+          <Link to="/job-approvals" className="btn-primary flex items-center gap-2 text-sm">
+            <Briefcase size={15}/> Review Job Postings
+          </Link>
         )}
       </div>
 
