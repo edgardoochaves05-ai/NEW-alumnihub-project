@@ -89,6 +89,22 @@ router.post("/:id/inquire", authenticate, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── Get job interactions with profiles (admin only) ──
+router.get("/:id/interactions", authenticate, authorize("admin"), async (req, res, next) => {
+  try {
+    const { type } = req.query;
+    let query = supabase
+      .from("job_interactions")
+      .select("profile_id, interaction_type, created_at, profiles(id, first_name, last_name, avatar_url, role, program, current_job_title)")
+      .eq("job_id", req.params.id)
+      .order("created_at", { ascending: false });
+    if (type) query = query.eq("interaction_type", type);
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) { next(err); }
+});
+
 // ── Get single job ──
 router.get("/:id", authenticate, async (req, res, next) => {
   try {

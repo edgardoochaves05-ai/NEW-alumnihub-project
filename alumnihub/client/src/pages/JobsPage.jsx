@@ -10,7 +10,7 @@ import {
   Search, Filter, Briefcase, Building2, MapPin, Clock, Plus, X,
   ChevronLeft, ChevronRight, Loader2, Sparkles, ExternalLink,
   BookmarkPlus, Calendar, GraduationCap, User, Mail,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, Eye, Send,
 } from "lucide-react";
 import JobMatchAnalytics from "../components/JobMatchAnalytics";
 
@@ -181,9 +181,17 @@ function JobCard({ job, matchScore, profile, onClick }) {
 
 // ── Job Detail Modal ───────────────────────────────────────────
 function JobDetailModal({ job, matchScore, profile, onClose }) {
+  const isAdmin = profile?.role === "admin";
+  const [viewers,   setViewers]   = useState([]);
+  const [inquirers, setInquirers] = useState([]);
+
   useEffect(() => {
     if (job?.id) api.post(`/jobs/${job.id}/view`).catch(() => {});
-  }, [job?.id]);
+    if (job?.id && isAdmin) {
+      api.get(`/jobs/${job.id}/interactions?type=view`).then(({ data }) => setViewers(data)).catch(() => {});
+      api.get(`/jobs/${job.id}/interactions?type=inquiry`).then(({ data }) => setInquirers(data)).catch(() => {});
+    }
+  }, [job?.id, isAdmin]);
 
   const trackInquiry = () => {
     if (job?.id) api.post(`/jobs/${job.id}/inquire`).catch(() => {});
@@ -273,6 +281,66 @@ function JobDetailModal({ job, matchScore, profile, onClose }) {
                 className="btn-secondary inline-flex items-center gap-1.5 text-xs py-1.5 px-3">
                 <User size={13}/> View Profile
               </Link>
+            </div>
+          )}
+
+          {/* ── Viewers & Inquirers (admin only) ── */}
+          {isAdmin && (viewers.length > 0 || inquirers.length > 0) && (
+            <div className="space-y-3 pt-3 border-t border-gray-100">
+              {viewers.length > 0 && (
+                <div>
+                  <p className="text-[11px] text-gray-400 uppercase tracking-widest font-semibold mb-2 flex items-center gap-1.5">
+                    <Eye size={11} className="text-indigo-500"/>Viewers
+                    <span className="normal-case tracking-normal font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-full text-[10px]">
+                      {viewers.length}
+                    </span>
+                  </p>
+                  <div className="flex items-center flex-wrap gap-1.5">
+                    {viewers.slice(0, 12).map(({ profiles: p }, i) => (
+                      <div
+                        key={p?.id ?? i}
+                        title={`${p?.first_name || ""} ${p?.last_name || ""}`.trim()}
+                        className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 overflow-hidden border-2 border-white shadow-sm"
+                      >
+                        {p?.avatar_url
+                          ? <img src={p.avatar_url} className="w-full h-full object-cover" alt=""/>
+                          : `${p?.first_name?.[0] || ""}${p?.last_name?.[0] || ""}`.toUpperCase() || "?"
+                        }
+                      </div>
+                    ))}
+                    {viewers.length > 12 && (
+                      <span className="text-xs text-gray-500 font-medium">+{viewers.length - 12} more</span>
+                    )}
+                  </div>
+                </div>
+              )}
+              {inquirers.length > 0 && (
+                <div>
+                  <p className="text-[11px] text-gray-400 uppercase tracking-widest font-semibold mb-2 flex items-center gap-1.5">
+                    <Send size={11} className="text-green-500"/>Inquirers
+                    <span className="normal-case tracking-normal font-semibold text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full text-[10px]">
+                      {inquirers.length}
+                    </span>
+                  </p>
+                  <div className="flex items-center flex-wrap gap-1.5">
+                    {inquirers.slice(0, 12).map(({ profiles: p }, i) => (
+                      <div
+                        key={p?.id ?? i}
+                        title={`${p?.first_name || ""} ${p?.last_name || ""}`.trim()}
+                        className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 overflow-hidden border-2 border-white shadow-sm"
+                      >
+                        {p?.avatar_url
+                          ? <img src={p.avatar_url} className="w-full h-full object-cover" alt=""/>
+                          : `${p?.first_name?.[0] || ""}${p?.last_name?.[0] || ""}`.toUpperCase() || "?"
+                        }
+                      </div>
+                    ))}
+                    {inquirers.length > 12 && (
+                      <span className="text-xs text-gray-500 font-medium">+{inquirers.length - 12} more</span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
