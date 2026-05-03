@@ -19,7 +19,6 @@ import AdvisorRosterPage from "./pages/AdvisorRosterPage";
 import StudentCareerPathPage from "./pages/StudentCareerPathPage";
 import AdvisorManagementPage from "./pages/AdvisorManagementPage";
 import CareerAdvicePage from "./pages/CareerAdvicePage";
-import JobApprovalsPage from "./pages/JobApprovalsPage";
 
 // Redirect career_advisor from /dashboard → their roster
 function DashboardRoute() {
@@ -91,16 +90,6 @@ function AppRoutes() {
 
         {/* Jobs — all roles */}
         <Route path="jobs" element={<JobsPage />} />
-
-        {/* Job Approvals — Admin only */}
-        <Route
-          path="job-approvals"
-          element={
-            <ProtectedRoute allowedRoles={["admin"]}>
-              <JobApprovalsPage />
-            </ProtectedRoute>
-          }
-        />
 
         {/* Inbox — Alumni, Student, Admin, Career Advisor */}
         <Route
