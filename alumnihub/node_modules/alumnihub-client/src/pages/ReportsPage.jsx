@@ -7,6 +7,76 @@ import {
 } from "recharts";
 import { Users, Briefcase, TrendingUp, GraduationCap, Loader2, RefreshCw, Eye, Send, ChevronUp, ChevronDown, Filter, X } from "lucide-react";
 
+function InteractionProfilesModal({ jobId, jobTitle, jobCompany, type, onClose }) {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get(`/jobs/${jobId}/interactions?type=${type}`)
+      .then(({ data }) => setUsers(data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [jobId, type]);
+
+  const label = type === "view" ? "Viewers" : "Inquirers";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-5 border-b border-gray-100">
+          <div>
+            <div className="flex items-center gap-2">
+              {type === "view"
+                ? <Eye size={16} className="text-indigo-600"/>
+                : <Send size={15} className="text-green-600"/>
+              }
+              <h3 className="font-bold text-gray-900">{label}</h3>
+              <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                {loading ? "…" : users.length}
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 mt-0.5 truncate max-w-[300px]">
+              {jobTitle} · {jobCompany}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18}/></button>
+        </div>
+        <div className="overflow-y-auto flex-1 p-4">
+          {loading ? (
+            <div className="flex justify-center py-10">
+              <Loader2 size={22} className="animate-spin text-blue-600"/>
+            </div>
+          ) : users.length === 0 ? (
+            <p className="text-center text-gray-400 text-sm py-10">No {label.toLowerCase()} yet.</p>
+          ) : (
+            <div className="space-y-2.5">
+              {users.map(({ profiles: p, created_at }, i) => (
+                <div key={p?.id ?? i} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50">
+                  <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 overflow-hidden">
+                    {p?.avatar_url
+                      ? <img src={p.avatar_url} className="w-full h-full object-cover" alt=""/>
+                      : `${p?.first_name?.[0] || ""}${p?.last_name?.[0] || ""}`.toUpperCase() || "?"
+                    }
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900">{p?.first_name} {p?.last_name}</p>
+                    <p className="text-xs text-gray-400 capitalize">
+                      {p?.role}{p?.program ? ` · ${p.program}` : ""}
+                    </p>
+                  </div>
+                  <span className="text-[10px] text-gray-400 flex-shrink-0">
+                    {new Date(created_at).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const PIE_COLORS = ["#3b82f6","#10b981","#f59e0b","#ef4444","#8b5cf6","#ec4899","#06b6d4","#84cc16"];
 
 function StatCard({ label, value, icon: Icon, color = "text-blue-600", sub }) {
@@ -25,7 +95,7 @@ function StatCard({ label, value, icon: Icon, color = "text-blue-600", sub }) {
 }
 
 export default function ReportsPage() {
-  const { isCareerAdvisor } = useAuth();
+  const { isCareerAdvisor, isAdmin } = useAuth();
 
   const [stats,      setStats]      = useState(null);
   const [trends,     setTrends]     = useState([]);
@@ -34,6 +104,7 @@ export default function ReportsPage() {
   const [sortField,     setSortField]     = useState("engagement");
   const [sortDir,       setSortDir]       = useState("desc");
   const [industryFilter, setIndustryFilter] = useState("");
+  const [interactionModal, setInteractionModal] = useState(null);
 
   useEffect(() => { fetchAll(); }, [isCareerAdvisor]);
 
@@ -323,6 +394,16 @@ export default function ReportsPage() {
         </div>
       )}
 
+      {interactionModal && (
+        <InteractionProfilesModal
+          jobId={interactionModal.jobId}
+          jobTitle={interactionModal.jobTitle}
+          jobCompany={interactionModal.jobCompany}
+          type={interactionModal.type}
+          onClose={() => setInteractionModal(null)}
+        />
+      )}
+
       {/* ── Job Posting Analytics ── */}
       {jobMetrics && (
         <>
@@ -467,14 +548,34 @@ export default function ReportsPage() {
                       </td>
                       <td className="py-3 text-gray-500 hidden sm:table-cell text-xs">{job.industry || "—"}</td>
                       <td className="py-3 text-right">
-                        <span className="inline-flex items-center gap-1 text-indigo-600 font-semibold">
-                          <Eye size={11}/>{job.views}
-                        </span>
+                        {isAdmin ? (
+                          <button
+                            onClick={() => setInteractionModal({ jobId: job.id, jobTitle: job.title, jobCompany: job.company, type: "view" })}
+                            className="inline-flex items-center gap-1 text-indigo-600 font-semibold hover:text-indigo-800 hover:underline"
+                            title="Click to see who viewed this job"
+                          >
+                            <Eye size={11}/>{job.views}
+                          </button>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-indigo-600 font-semibold">
+                            <Eye size={11}/>{job.views}
+                          </span>
+                        )}
                       </td>
                       <td className="py-3 text-right">
-                        <span className="inline-flex items-center gap-1 text-green-600 font-semibold">
-                          <Send size={11}/>{job.inquiries}
-                        </span>
+                        {isAdmin ? (
+                          <button
+                            onClick={() => setInteractionModal({ jobId: job.id, jobTitle: job.title, jobCompany: job.company, type: "inquiry" })}
+                            className="inline-flex items-center gap-1 text-green-600 font-semibold hover:text-green-800 hover:underline"
+                            title="Click to see who inquired about this job"
+                          >
+                            <Send size={11}/>{job.inquiries}
+                          </button>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-green-600 font-semibold">
+                            <Send size={11}/>{job.inquiries}
+                          </span>
+                        )}
                       </td>
                       <td className="py-3 text-right">
                         <span className={`font-bold ${job.engagement > 0 ? "text-gray-900" : "text-gray-300"}`}>

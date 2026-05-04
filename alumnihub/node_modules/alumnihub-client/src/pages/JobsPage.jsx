@@ -2,7 +2,6 @@ import { useEffect, useState, useRef, useMemo } from "react";
 import { Link } from "react-router-dom";
 import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
-import { formatDistanceToNow } from "date-fns";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
@@ -10,7 +9,8 @@ import {
   Search, Filter, Briefcase, Building2, MapPin, Clock, Plus, X,
   ChevronLeft, ChevronRight, Loader2, Sparkles, ExternalLink,
   BookmarkPlus, Calendar, GraduationCap, User, Mail,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, Eye, Send, CheckCircle2, XCircle, Trash2, ShieldCheck, Clock3,
+  Pencil, AlertTriangle, RefreshCw,
 } from "lucide-react";
 import JobMatchAnalytics from "../components/JobMatchAnalytics";
 
@@ -20,12 +20,9 @@ const EXP_LEVELS = ["entry","mid","senior","executive"];
 
 function normalizeScore(score) {
   if (!score) return 0;
-  // If score is already a percentage (> 1), clamp to 100
-  // If score is a decimal (0-1 range), multiply by 100
   const raw = score > 1 ? score : score * 100;
   return Math.min(100, Math.round(raw));
 }
-
 
 function MatchBadge({ score }) {
   if (!score) return null;
@@ -38,21 +35,18 @@ function MatchBadge({ score }) {
   );
 }
 
-function MatchBar({ score }) {
-  if (!score) return null;
-  const pct = normalizeScore(score);
-  const barColor = pct >= 75 ? "bg-green-500" : pct >= 50 ? "bg-blue-500" : "bg-gray-300";
-  const textColor = pct >= 75 ? "text-green-700" : pct >= 50 ? "text-blue-700" : "text-gray-500";
+function StatusBadge({ status }) {
+  if (!status || status === "approved") return null;
+  const map = {
+    pending:  { cls: "bg-amber-100 text-amber-700 border-amber-200", label: "Pending Review", Icon: Clock3 },
+    declined: { cls: "bg-red-100 text-red-700 border-red-200",       label: "Declined",       Icon: XCircle },
+  };
+  const { cls, label, Icon } = map[status] || {};
+  if (!label) return null;
   return (
-    <div className="mt-2">
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-xs text-gray-400 flex items-center gap-1"><Sparkles size={10}/>AI Match</span>
-        <span className={`text-xs font-semibold ${textColor}`}>{pct}%</span>
-      </div>
-      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full transition-all duration-300 ${barColor}`} style={{ width: `${pct}%` }}/>
-      </div>
-    </div>
+    <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${cls}`}>
+      <Icon size={10}/>{label}
+    </span>
   );
 }
 
@@ -119,8 +113,9 @@ function Top10MatchChart({ jobs, matchMap, onJobClick }) {
 }
 
 // ── Job Card ───────────────────────────────────────────────────
-function JobCard({ job, matchScore, profile, onClick }) {
+function JobCard({ job, matchScore, profile, onClick, onApprove, onDecline, onDelete, busyId }) {
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const isAdmin      = profile?.role === "admin";
   const hasAnalytics = profile?.role === "alumni" && !!matchScore;
   const overallPct   = normalizeScore(matchScore);
 
@@ -129,19 +124,29 @@ function JobCard({ job, matchScore, profile, onClick }) {
     overallPct >= 50 ? "bg-blue-100 text-blue-700 border-blue-200"   :
     "bg-gray-100 text-gray-500 border-gray-200";
 
+  const isBusy = busyId === job.id;
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all flex flex-col">
-      {/* ── Main card body ── */}
       <div onClick={() => onClick(job)} className="flex flex-col gap-1.5 p-5 cursor-pointer flex-1">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-gray-900 text-sm leading-snug mb-1">{job.title}</h3>
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <h3 className="font-semibold text-gray-900 text-sm leading-snug">{job.title}</h3>
+              <StatusBadge status={job.status}/>
+            </div>
             <div className="flex items-center gap-1 text-xs text-gray-600">
               <Building2 size={12}/><span className="font-medium">{job.company}</span>
             </div>
             {job.location && (
               <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
                 <MapPin size={11}/>{job.location}
+              </div>
+            )}
+            {isAdmin && job.profiles && (
+              <div className="flex items-center gap-1 text-[11px] text-gray-500 mt-1">
+                <User size={11}/>Posted by {job.profiles.first_name} {job.profiles.last_name}
+                <span className="capitalize text-gray-400">· {job.profiles.role}</span>
               </div>
             )}
           </div>
@@ -158,7 +163,38 @@ function JobCard({ job, matchScore, profile, onClick }) {
         </div>
       </div>
 
-      {/* ── Analytics accordion — alumni only ── */}
+      {/* Admin moderation controls */}
+      {isAdmin && (
+        <div className="border-t border-gray-100 p-3 flex flex-wrap gap-2 bg-gray-50/60">
+          {job.status === "pending" && (
+            <>
+              <button
+                onClick={e => { e.stopPropagation(); onApprove(job); }}
+                disabled={isBusy}
+                className="btn-primary flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 text-xs py-1.5 px-2 disabled:opacity-50"
+              >
+                {isBusy ? <Loader2 size={12} className="animate-spin"/> : <CheckCircle2 size={13}/>} Approve
+              </button>
+              <button
+                onClick={e => { e.stopPropagation(); onDecline(job); }}
+                disabled={isBusy}
+                className="btn-secondary flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 text-xs py-1.5 px-2 disabled:opacity-50"
+              >
+                <XCircle size={13}/> Decline
+              </button>
+            </>
+          )}
+          <button
+            onClick={e => { e.stopPropagation(); onDelete(job); }}
+            disabled={isBusy}
+            className="inline-flex items-center justify-center gap-1.5 text-xs py-1.5 px-2 rounded-lg border border-red-200 text-red-600 bg-white hover:bg-red-50 disabled:opacity-50"
+          >
+            <Trash2 size={13}/> Delete
+          </button>
+        </div>
+      )}
+
+      {/* Analytics accordion — alumni only */}
       {hasAnalytics && (
         <div className="border-t border-gray-100">
           <button
@@ -181,9 +217,17 @@ function JobCard({ job, matchScore, profile, onClick }) {
 
 // ── Job Detail Modal ───────────────────────────────────────────
 function JobDetailModal({ job, matchScore, profile, onClose }) {
+  const isAdmin = profile?.role === "admin";
+  const [viewers,   setViewers]   = useState([]);
+  const [inquirers, setInquirers] = useState([]);
+
   useEffect(() => {
-    if (job?.id) api.post(`/jobs/${job.id}/view`).catch(() => {});
-  }, [job?.id]);
+    if (job?.id && !isAdmin) api.post(`/jobs/${job.id}/view`).catch(() => {});
+    if (job?.id && isAdmin) {
+      api.get(`/jobs/${job.id}/interactions?type=view`).then(({ data }) => setViewers(data)).catch(() => {});
+      api.get(`/jobs/${job.id}/interactions?type=inquiry`).then(({ data }) => setInquirers(data)).catch(() => {});
+    }
+  }, [job?.id, isAdmin]);
 
   const trackInquiry = () => {
     if (job?.id) api.post(`/jobs/${job.id}/inquire`).catch(() => {});
@@ -196,12 +240,12 @@ function JobDetailModal({ job, matchScore, profile, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        {/* ── Header ── */}
         <div className="flex items-start justify-between p-6 border-b border-gray-100">
           <div>
             <div className="flex items-center gap-2 flex-wrap mb-1">
               <h2 className="text-lg font-bold text-gray-900">{job.title}</h2>
               <MatchBadge score={matchScore}/>
+              <StatusBadge status={job.status}/>
             </div>
             <p className="text-sm text-gray-600 font-medium">{job.company}</p>
           </div>
@@ -209,7 +253,6 @@ function JobDetailModal({ job, matchScore, profile, onClose }) {
         </div>
 
         <div className="p-6 space-y-5">
-          {/* ── Meta chips ── */}
           <div className="flex flex-wrap gap-4 text-sm text-gray-600">
             {job.location         && <span className="flex items-center gap-1.5"><MapPin size={14}/>{job.location}</span>}
             {job.job_type         && <span className="flex items-center gap-1.5"><Clock size={14}/>{job.job_type}</span>}
@@ -218,7 +261,6 @@ function JobDetailModal({ job, matchScore, profile, onClose }) {
             {job.expires_at       && <span className="flex items-center gap-1.5"><Calendar size={14}/>Deadline: {new Date(job.expires_at).toLocaleDateString()}</span>}
           </div>
 
-          {/* ── Salary ── */}
           {(job.salary_min || job.salary_max) && (
             <p className="text-sm font-semibold text-green-700">
               Salary: ₱ {job.salary_min ? Number(job.salary_min).toLocaleString() : "?"}
@@ -226,12 +268,10 @@ function JobDetailModal({ job, matchScore, profile, onClose }) {
             </p>
           )}
 
-          {/* ── AI Match Analytics panel (alumni only) ── */}
           {showAnalytics && (
             <JobMatchAnalytics job={job} profile={profile} matchScore={matchScore} mode="full"/>
           )}
 
-          {/* ── Description ── */}
           {job.description && (
             <div>
               <h4 className="text-sm font-semibold text-gray-800 mb-2">Description</h4>
@@ -239,7 +279,6 @@ function JobDetailModal({ job, matchScore, profile, onClose }) {
             </div>
           )}
 
-          {/* ── Requirements ── */}
           {job.requirements && (
             <div>
               <h4 className="text-sm font-semibold text-gray-800 mb-2">Requirements</h4>
@@ -247,7 +286,6 @@ function JobDetailModal({ job, matchScore, profile, onClose }) {
             </div>
           )}
 
-          {/* ── Posted by ── */}
           {job.profiles && (
             <div className="flex items-center justify-between pt-3 mt-1 border-t border-gray-100">
               <div className="flex items-center gap-3">
@@ -276,8 +314,68 @@ function JobDetailModal({ job, matchScore, profile, onClose }) {
             </div>
           )}
 
-          {/* ── Apply buttons ── */}
-          {(job.application_url || job.application_email) && (
+          {/* Viewers & Inquirers (admin only) */}
+          {isAdmin && (viewers.length > 0 || inquirers.length > 0) && (
+            <div className="space-y-3 pt-3 border-t border-gray-100">
+              {viewers.length > 0 && (
+                <div>
+                  <p className="text-[11px] text-gray-400 uppercase tracking-widest font-semibold mb-2 flex items-center gap-1.5">
+                    <Eye size={11} className="text-indigo-500"/>Viewers
+                    <span className="normal-case tracking-normal font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-full text-[10px]">
+                      {viewers.length}
+                    </span>
+                  </p>
+                  <div className="flex items-center flex-wrap gap-1.5">
+                    {viewers.slice(0, 12).map(({ profiles: p }, i) => (
+                      <div
+                        key={p?.id ?? i}
+                        title={`${p?.first_name || ""} ${p?.last_name || ""}`.trim()}
+                        className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 overflow-hidden border-2 border-white shadow-sm"
+                      >
+                        {p?.avatar_url
+                          ? <img src={p.avatar_url} className="w-full h-full object-cover" alt=""/>
+                          : `${p?.first_name?.[0] || ""}${p?.last_name?.[0] || ""}`.toUpperCase() || "?"
+                        }
+                      </div>
+                    ))}
+                    {viewers.length > 12 && (
+                      <span className="text-xs text-gray-500 font-medium">+{viewers.length - 12} more</span>
+                    )}
+                  </div>
+                </div>
+              )}
+              {inquirers.length > 0 && (
+                <div>
+                  <p className="text-[11px] text-gray-400 uppercase tracking-widest font-semibold mb-2 flex items-center gap-1.5">
+                    <Send size={11} className="text-green-500"/>Inquirers
+                    <span className="normal-case tracking-normal font-semibold text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full text-[10px]">
+                      {inquirers.length}
+                    </span>
+                  </p>
+                  <div className="flex items-center flex-wrap gap-1.5">
+                    {inquirers.slice(0, 12).map(({ profiles: p }, i) => (
+                      <div
+                        key={p?.id ?? i}
+                        title={`${p?.first_name || ""} ${p?.last_name || ""}`.trim()}
+                        className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 overflow-hidden border-2 border-white shadow-sm"
+                      >
+                        {p?.avatar_url
+                          ? <img src={p.avatar_url} className="w-full h-full object-cover" alt=""/>
+                          : `${p?.first_name?.[0] || ""}${p?.last_name?.[0] || ""}`.toUpperCase() || "?"
+                        }
+                      </div>
+                    ))}
+                    {inquirers.length > 12 && (
+                      <span className="text-xs text-gray-500 font-medium">+{inquirers.length - 12} more</span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Apply buttons — hidden for admins */}
+          {!isAdmin && (job.application_url || job.application_email) && (
             <div className="flex flex-wrap gap-3 pt-2 border-t border-gray-100">
               {job.application_url && (
                 <a href={job.application_url} target="_blank" rel="noreferrer"
@@ -301,13 +399,35 @@ function JobDetailModal({ job, matchScore, profile, onClose }) {
   );
 }
 
-// ── Post Job Modal ─────────────────────────────────────────────
-function PostJobModal({ onClose, onCreated }) {
-  const [form, setForm] = useState({
-    title:"", company:"", location:"", industry:"", job_type:"full-time",
-    experience_level:"entry", salary_min:"", salary_max:"",
-    description:"", requirements:"", application_url:"", application_email:"", expires_at:"",
-  });
+// ── Job Form Modal (shared for create + edit) ──────────────────
+function JobFormModal({ onClose, onSaved, existing }) {
+  const isEdit       = !!existing;
+  const isResubmit   = isEdit && existing.status === "declined";
+  const toDateInput  = (v) => (v ? String(v).slice(0, 10) : "");
+
+  const [form, setForm] = useState(
+    isEdit
+      ? {
+          title:             existing.title             || "",
+          company:           existing.company           || "",
+          location:          existing.location          || "",
+          industry:          existing.industry          || "",
+          job_type:          existing.job_type          || "full-time",
+          experience_level:  existing.experience_level  || "entry",
+          salary_min:        existing.salary_min ?? "",
+          salary_max:        existing.salary_max ?? "",
+          description:       existing.description       || "",
+          requirements:      existing.requirements      || "",
+          application_url:   existing.application_url   || "",
+          application_email: existing.application_email || "",
+          expires_at:        toDateInput(existing.expires_at),
+        }
+      : {
+          title:"", company:"", location:"", industry:"", job_type:"full-time",
+          experience_level:"entry", salary_min:"", salary_max:"",
+          description:"", requirements:"", application_url:"", application_email:"", expires_at:"",
+        }
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState("");
 
@@ -318,23 +438,44 @@ function PostJobModal({ onClose, onCreated }) {
     if (!form.title || !form.company) { setError("Title and company are required."); return; }
     setSaving(true);
     try {
-      const { data } = await api.post("/jobs", form);
-      onCreated(data);
+      const { data } = isEdit
+        ? await api.put(`/jobs/${existing.id}`, form)
+        : await api.post("/jobs", form);
+      onSaved(data);
     } catch(err) {
-      const errorMsg = err.response?.data?.error || "Failed to post job.";
-      setError(typeof errorMsg === 'string' ? errorMsg : errorMsg.message || "Failed to post job.");
+      const errorMsg = err.response?.data?.error || "Failed to save job.";
+      setError(typeof errorMsg === 'string' ? errorMsg : errorMsg.message || "Failed to save job.");
     } finally { setSaving(false); }
   }
+
+  const title       = isEdit ? (isResubmit ? "Revise & Resubmit" : "Edit Job Listing") : "Post a Job";
+  const submitLabel = isEdit ? (isResubmit ? "Resubmit for Review" : "Save Changes")   : "Submit for Review";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
-          <h2 className="text-lg font-bold text-gray-900">Post a Job</h2>
+          <h2 className="text-lg font-bold text-gray-900">{title}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20}/></button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && <div className="px-4 py-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg">{error}</div>}
+          {isResubmit && existing.decline_reason && (
+            <div className="px-4 py-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg flex items-start gap-2">
+              <AlertTriangle size={14} className="mt-0.5 flex-shrink-0"/>
+              <span><strong>Admin decline reason:</strong> {existing.decline_reason}</span>
+            </div>
+          )}
+          <div className="px-4 py-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-lg flex items-start gap-2">
+            <ShieldCheck size={14} className="mt-0.5 flex-shrink-0"/>
+            <span>
+              {isResubmit
+                ? "Saving will resend this listing to the admin for review."
+                : isEdit
+                  ? "Edits to a pending listing keep it in the admin queue."
+                  : "Job listings are reviewed by an admin before they appear publicly."}
+            </span>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
               <label className="label">Job Title *</label>
@@ -399,7 +540,7 @@ function PostJobModal({ onClose, onCreated }) {
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancel</button>
             <button type="submit" disabled={saving} className="btn-primary flex-1 flex items-center justify-center gap-2">
-              {saving && <Loader2 size={14} className="animate-spin"/>} Post Job
+              {saving && <Loader2 size={14} className="animate-spin"/>} {submitLabel}
             </button>
           </div>
         </form>
@@ -408,11 +549,69 @@ function PostJobModal({ onClose, onCreated }) {
   );
 }
 
+// ── My Listing Card (poster's pending/declined queue) ──────────
+function MyListingCard({ job, onEdit, onDelete, busyId }) {
+  const isBusy   = busyId === job.id;
+  const declined = job.status === "declined";
+  return (
+    <div className={`bg-white rounded-xl shadow-sm border overflow-hidden ${
+      declined ? "border-red-200" : "border-amber-200"
+    }`}>
+      <div className="p-5 flex flex-col gap-1.5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <h3 className="font-semibold text-gray-900 text-sm leading-snug">{job.title}</h3>
+              <StatusBadge status={job.status}/>
+            </div>
+            <div className="flex items-center gap-1 text-xs text-gray-600">
+              <Building2 size={12}/><span className="font-medium">{job.company}</span>
+            </div>
+            {job.location && (
+              <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
+                <MapPin size={11}/>{job.location}
+              </div>
+            )}
+          </div>
+          <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+            <Briefcase size={18} className="text-blue-600"/>
+          </div>
+        </div>
+        {declined && job.decline_reason && (
+          <div className="mt-2 px-3 py-2 bg-red-50 border border-red-100 rounded-lg text-xs text-red-700 flex items-start gap-2">
+            <AlertTriangle size={12} className="mt-0.5 flex-shrink-0"/>
+            <span><strong>Reason:</strong> {job.decline_reason}</span>
+          </div>
+        )}
+      </div>
+      <div className="border-t border-gray-100 p-3 flex flex-wrap gap-2 bg-gray-50/60">
+        <button
+          onClick={() => onEdit(job)}
+          disabled={isBusy}
+          className="btn-primary flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 text-xs py-1.5 px-2 disabled:opacity-50"
+        >
+          {declined ? <RefreshCw size={13}/> : <Pencil size={13}/>}
+          {declined ? "Revise & Resubmit" : "Edit"}
+        </button>
+        <button
+          onClick={() => onDelete(job)}
+          disabled={isBusy}
+          className="inline-flex items-center justify-center gap-1.5 text-xs py-1.5 px-2 rounded-lg border border-red-200 text-red-600 bg-white hover:bg-red-50 disabled:opacity-50"
+        >
+          <Trash2 size={13}/> Delete
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ──────────────────────────────────────────────────
 export default function JobsPage() {
   const { profile } = useAuth();
+  const isAdmin = profile?.role === "admin";
+
   const [jobs, setJobs]               = useState([]);
-  const [top10Jobs, setTop10Jobs]     = useState([]); // stable — never changes on pagination
+  const [top10Jobs, setTop10Jobs]     = useState([]);
   const [matchMap, setMatchMap]       = useState({});
   const [loading, setLoading]         = useState(true);
   const [search, setSearch]           = useState("");
@@ -425,14 +624,20 @@ export default function JobsPage() {
   const [showPost, setShowPost]       = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [showOthers, setShowOthers]   = useState(false);
+  const [adminTab, setAdminTab]       = useState("approved"); // approved | pending
+  const [pendingCount, setPendingCount] = useState(0);
+  const [busyId, setBusyId]           = useState(null);
+  const [myListings, setMyListings]   = useState([]);  // poster's pending + declined
+  const [showMyListings, setShowMyListings] = useState(false);
+  const [editingJob, setEditingJob]   = useState(null);
   const debounceRef = useRef(null);
 
-  // top10Ids derived from the stable top10Jobs list (unaffected by pagination)
   const top10Ids = useMemo(() => {
     if (!top10Jobs.length) return new Set();
     return new Set(top10Jobs.map(j => j.id));
   }, [top10Jobs]);
 
+  // Alumni-only AI matches
   useEffect(() => {
     if (profile?.role === "alumni") {
       api.get("/jobs/matched").then(({ data }) => {
@@ -445,7 +650,6 @@ export default function JobsPage() {
           }
         }
         setMatchMap(map);
-        // Sort by score descending and take top 10 — stored permanently
         const sorted = jobObjs
           .sort((a, b) => (map[b.id] || 0) - (map[a.id] || 0))
           .slice(0, 10);
@@ -454,11 +658,39 @@ export default function JobsPage() {
     }
   }, [profile]);
 
+  // Reset page when admin switches tabs
+  useEffect(() => { setPage(1); }, [adminTab]);
+
+  // Fetch jobs (debounced)
   useEffect(() => {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(fetchJobs, 300);
     return () => clearTimeout(debounceRef.current);
-  }, [search, industry, jobType, expLevel, page]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, industry, jobType, expLevel, page, adminTab, isAdmin]);
+
+  // Track pending count for admin badge
+  useEffect(() => {
+    if (!isAdmin) return;
+    api.get("/jobs?status=pending&limit=1").then(({ data }) => {
+      setPendingCount(data.total || 0);
+    }).catch(() => {});
+  }, [isAdmin, jobs]);
+
+  // Poster: load my pending + declined listings
+  const canPostNow = profile?.role && profile.role !== "student" && profile.role !== "admin";
+  async function loadMyListings() {
+    if (!canPostNow) return;
+    try {
+      const [{ data: pending }, { data: declined }] = await Promise.all([
+        api.get("/jobs/mine?status=pending"),
+        api.get("/jobs/mine?status=declined"),
+      ]);
+      // Declined first so the poster sees what needs revision up top
+      setMyListings([...(declined || []), ...(pending || [])]);
+    } catch { /* ignore */ }
+  }
+  useEffect(() => { loadMyListings(); /* eslint-disable-next-line */ }, [profile?.id]);
 
   async function fetchJobs() {
     setLoading(true);
@@ -468,6 +700,7 @@ export default function JobsPage() {
       if (industry) params.set("industry", industry);
       if (jobType)  params.set("job_type", jobType);
       if (expLevel) params.set("experience_level", expLevel);
+      if (isAdmin)  params.set("status", adminTab); // approved | pending
       params.set("page", page);
       const { data } = await api.get(`/jobs?${params}`);
       setJobs(data.jobs || data);
@@ -476,37 +709,262 @@ export default function JobsPage() {
     finally { setLoading(false); }
   }
 
+  async function handleApprove(job) {
+    setBusyId(job.id);
+    try {
+      await api.patch(`/jobs/${job.id}/approve`);
+      setJobs(prev => prev.filter(j => j.id !== job.id));
+      setPendingCount(c => Math.max(0, c - 1));
+    } catch (e) {
+      alert(e.response?.data?.error || "Failed to approve job.");
+    } finally { setBusyId(null); }
+  }
+
+  async function handleDecline(job) {
+    const reason = window.prompt("Optional: provide a reason for declining this listing.", "");
+    if (reason === null) return;
+    setBusyId(job.id);
+    try {
+      await api.patch(`/jobs/${job.id}/decline`, { reason });
+      setJobs(prev => prev.filter(j => j.id !== job.id));
+      setPendingCount(c => Math.max(0, c - 1));
+    } catch (e) {
+      alert(e.response?.data?.error || "Failed to decline job.");
+    } finally { setBusyId(null); }
+  }
+
+  async function handleDelete(job) {
+    if (!window.confirm(`Delete "${job.title}" at ${job.company}? This cannot be undone.`)) return;
+    setBusyId(job.id);
+    try {
+      await api.delete(`/jobs/${job.id}`);
+      setJobs(prev => prev.filter(j => j.id !== job.id));
+      setMyListings(prev => prev.filter(j => j.id !== job.id));
+      if (job.status === "pending") setPendingCount(c => Math.max(0, c - 1));
+    } catch (e) {
+      alert(e.response?.data?.error || "Failed to delete job.");
+    } finally { setBusyId(null); }
+  }
+
+  // Apply the result of a save (create or edit) into the right buckets.
+  function handleSaved(saved) {
+    setEditingJob(null);
+    setShowPost(false);
+    if (saved.status === "approved") {
+      setJobs(prev => {
+        const others = prev.filter(j => j.id !== saved.id);
+        return [saved, ...others];
+      });
+      setMyListings(prev => prev.filter(j => j.id !== saved.id));
+    } else {
+      // pending or declined → poster's queue, not the public list
+      setJobs(prev => prev.filter(j => j.id !== saved.id));
+      setMyListings(prev => {
+        const others = prev.filter(j => j.id !== saved.id);
+        // declined first, then pending — preserve sort
+        return saved.status === "declined" ? [saved, ...others] : [...others, saved];
+      });
+    }
+  }
+
   const activeFilters = [industry, jobType, expLevel].filter(Boolean).length;
   const hasMatches    = profile?.role === "alumni" && Object.keys(matchMap).length > 0;
+  const canPost       = profile?.role && profile.role !== "student" && profile.role !== "admin";
 
+  // ───────────── Admin view ─────────────
+  if (isAdmin) {
+    return (
+      <div className="max-w-5xl mx-auto space-y-5">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <ShieldCheck size={22} className="text-blue-600"/>Job Listings
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">Moderate alumni and career-advisor job postings.</p>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 border-b border-gray-200">
+          <button
+            onClick={() => setAdminTab("approved")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              adminTab === "approved" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Jobs
+          </button>
+          <button
+            onClick={() => setAdminTab("pending")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors inline-flex items-center gap-2 ${
+              adminTab === "pending" ? "border-amber-500 text-amber-600" : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Pending Requests
+            {pendingCount > 0 && (
+              <span className="bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                {pendingCount}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Search + filters */}
+        <div className="flex gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-56">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+            <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
+              className="input-field pl-9" placeholder="Search jobs or companies…"/>
+          </div>
+          <button onClick={() => setShowFilters(v => !v)}
+            className={`btn-secondary flex items-center gap-2 text-sm ${activeFilters ? "border-blue-500 text-blue-600" : ""}`}>
+            <Filter size={14}/>Filters
+            {activeFilters > 0 && (
+              <span className="bg-blue-600 text-white text-xs w-4 h-4 rounded-full flex items-center justify-center">{activeFilters}</span>
+            )}
+          </button>
+        </div>
+
+        {showFilters && (
+          <div className="card flex flex-wrap gap-4">
+            <div className="flex-1 min-w-36">
+              <label className="label">Industry</label>
+              <select value={industry} onChange={e => { setIndustry(e.target.value); setPage(1); }} className="input-field bg-white text-sm">
+                <option value="">All Industries</option>
+                {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
+              </select>
+            </div>
+            <div className="flex-1 min-w-36">
+              <label className="label">Job Type</label>
+              <select value={jobType} onChange={e => { setJobType(e.target.value); setPage(1); }} className="input-field bg-white text-sm">
+                <option value="">All Types</option>
+                {JOB_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div className="flex-1 min-w-36">
+              <label className="label">Experience Level</label>
+              <select value={expLevel} onChange={e => { setExpLevel(e.target.value); setPage(1); }} className="input-field bg-white text-sm">
+                <option value="">All Levels</option>
+                {EXP_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </div>
+            {activeFilters > 0 && (
+              <div className="flex items-end">
+                <button onClick={() => { setIndustry(""); setJobType(""); setExpLevel(""); setPage(1); }}
+                  className="btn-secondary text-sm flex items-center gap-1.5"><X size={13}/>Clear</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Grid */}
+        {loading ? (
+          <div className="flex items-center justify-center h-48"><Loader2 size={24} className="animate-spin text-blue-600"/></div>
+        ) : jobs.length === 0 ? (
+          <div className="card text-center py-16 text-gray-400">
+            <BookmarkPlus size={36} className="mx-auto mb-3 opacity-40"/>
+            <p className="text-sm">
+              {adminTab === "pending" ? "No job listings awaiting review." : "No approved job listings yet."}
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {jobs.map(job => (
+              <JobCard
+                key={job.id}
+                job={job}
+                profile={profile}
+                onClick={setSelectedJob}
+                onApprove={handleApprove}
+                onDecline={handleDecline}
+                onDelete={handleDelete}
+                busyId={busyId}
+              />
+            ))}
+          </div>
+        )}
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={page === 1} className="btn-secondary p-2 disabled:opacity-40">
+              <ChevronLeft size={16}/>
+            </button>
+            <span className="text-sm text-gray-600">Page {page} of {totalPages}</span>
+            <button onClick={() => setPage(p => Math.min(totalPages, p+1))} disabled={page === totalPages} className="btn-secondary p-2 disabled:opacity-40">
+              <ChevronRight size={16}/>
+            </button>
+          </div>
+        )}
+
+        {selectedJob && (
+          <JobDetailModal job={selectedJob} profile={profile} onClose={() => setSelectedJob(null)}/>
+        )}
+      </div>
+    );
+  }
+
+  // ───────────── Default view (alumni / career_advisor / student) ─────────────
   return (
     <div className="max-w-5xl mx-auto space-y-5">
-      {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Job Listings</h1>
           <p className="text-sm text-gray-500 mt-1">Browse opportunities and post openings for the alumni network.</p>
         </div>
-        {profile?.role !== "student" && (
+        {canPost && (
           <button onClick={() => setShowPost(true)} className="btn-primary flex items-center gap-2 text-sm">
             <Plus size={15}/> Post a Job
           </button>
         )}
       </div>
 
-      {/* Top 10 Chart — alumni only, uses stable top10Jobs */}
+      {/* Poster's My Listings — pending + declined submissions */}
+      {canPost && myListings.length > 0 && (
+        <div className="card">
+          <button
+            onClick={() => setShowMyListings(v => !v)}
+            className="w-full flex items-center justify-between gap-3 text-left"
+          >
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                <ShieldCheck size={15} className="text-amber-500"/>
+                My Submissions
+                <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+                  {myListings.length}
+                </span>
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Listings awaiting admin review or returned for revision.
+              </p>
+            </div>
+            {showMyListings ? <ChevronUp size={16} className="text-gray-400"/> : <ChevronDown size={16} className="text-gray-400"/>}
+          </button>
+          {showMyListings && (
+            <div className="grid gap-3 sm:grid-cols-2 mt-4">
+              {myListings.map(job => (
+                <MyListingCard
+                  key={job.id}
+                  job={job}
+                  onEdit={setEditingJob}
+                  onDelete={handleDelete}
+                  busyId={busyId}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {hasMatches && (
         <Top10MatchChart jobs={top10Jobs} matchMap={matchMap} onJobClick={setSelectedJob}/>
       )}
 
-      {/* AI Banner */}
       {hasMatches && (
         <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700">
           <Sparkles size={16}/> AI match scores shown on each listing are based on your profile.
         </div>
       )}
 
-      {/* Other Listings toggle */}
       {hasMatches && (
         <div>
           <button
@@ -522,7 +980,6 @@ export default function JobsPage() {
         </div>
       )}
 
-      {/* Search + Filter — only visible when Other Listings is open (or non-alumni) */}
       {(!hasMatches || showOthers) && (
         <>
           <div className="flex gap-3 flex-wrap">
@@ -574,10 +1031,7 @@ export default function JobsPage() {
         </>
       )}
 
-      {/* Jobs Grid */}
       {(() => {
-        // For alumni with matches: only show when "Other Listings" is toggled on
-        // For others (non-alumni / no match data): always show all jobs
         const shouldShow = !hasMatches || showOthers;
         if (!shouldShow) return null;
 
@@ -599,7 +1053,6 @@ export default function JobsPage() {
         );
       })()}
 
-      {/* Pagination — only visible when Other Listings is open */}
       {(!hasMatches || showOthers) && totalPages > 1 && (
         <div className="flex items-center justify-center gap-3 pt-2">
           <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={page === 1} className="btn-secondary p-2 disabled:opacity-40">
@@ -616,7 +1069,10 @@ export default function JobsPage() {
         <JobDetailModal job={selectedJob} matchScore={matchMap[selectedJob.id]} profile={profile} onClose={() => setSelectedJob(null)}/>
       )}
       {showPost && (
-        <PostJobModal onClose={() => setShowPost(false)} onCreated={newJob => { setJobs(prev => [newJob, ...prev]); setShowPost(false); }}/>
+        <JobFormModal onClose={() => setShowPost(false)} onSaved={handleSaved}/>
+      )}
+      {editingJob && (
+        <JobFormModal existing={editingJob} onClose={() => setEditingJob(null)} onSaved={handleSaved}/>
       )}
     </div>
   );
