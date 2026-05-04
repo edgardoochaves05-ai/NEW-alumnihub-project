@@ -111,6 +111,7 @@ export default function AnnouncementsWidget() {
   const [showModal, setShowModal] = useState(false);
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState("approved"); // "approved" | "pending"
+  const [autoSwitched, setAutoSwitched] = useState(false);
 
   const load = () =>
     Promise.all([
@@ -118,7 +119,13 @@ export default function AnnouncementsWidget() {
       api.get("/announcements/pending").catch(() => ({ data: [] })),
     ]).then(([r, p]) => {
       setRecent(Array.isArray(r.data) ? r.data : []);
-      setPending(Array.isArray(p.data) ? p.data : []);
+      const pendingList = Array.isArray(p.data) ? p.data : [];
+      setPending(pendingList);
+      // First load: if there are items awaiting review, surface them immediately
+      if (!autoSwitched && pendingList.length > 0) {
+        setTab("pending");
+        setAutoSwitched(true);
+      }
     });
 
   useEffect(() => { load(); }, []);
