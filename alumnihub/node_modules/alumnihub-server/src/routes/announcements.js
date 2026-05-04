@@ -5,6 +5,8 @@ const { supabase } = require("../config/supabase.js");
 const router = Router();
 
 const VALID_CATEGORIES = ["Event", "Career Fair", "Campus News", "Mentorship"];
+const APPROVER_ROLES = ["admin", "career_advisor"];
+const POSTER_ROLES = ["admin", "career_advisor", "alumni"];
 
 // Check if Supabase is available before processing requests
 router.use((req, res, next) => {
@@ -23,7 +25,7 @@ router.get("/", authenticate, async (req, res, next) => {
     const { limit = 10 } = req.query;
     const { data, error } = await supabase
       .from("announcements")
-      .select("id, title, content, category, created_at, profiles!posted_by(first_name, last_name)")
+      .select("id, title, content, category, created_at, profiles!posted_by(first_name, last_name, role)")
       .eq("is_published", true)
       .order("created_at", { ascending: false })
       .limit(parseInt(limit));
@@ -36,6 +38,38 @@ router.get("/", authenticate, async (req, res, next) => {
     res.json(data);
   } catch (err) {
     console.error("[ANNOUNCEMENTS] Error:", err);
+    next(err);
+  }
+});
+
+// ── GET /api/announcements/pending (approvers only) ────────────
+router.get("/pending", authenticate, authorize(...APPROVER_ROLES), async (req, res, next) => {
+  try {
+    const { data, error } = await supabase
+      .from("announcements")
+      .select("id, title, content, category, created_at, posted_by, profiles!posted_by(first_name, last_name, role)")
+      .eq("is_published", false)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── GET /api/announcements/mine (current user's submissions) ───
+router.get("/mine", authenticate, async (req, res, next) => {
+  try {
+    const { data, error } = await supabase
+      .from("announcements")
+      .select("id, title, content, category, created_at, is_published")
+      .eq("posted_by", req.user.id)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
     next(err);
   }
 });
@@ -83,8 +117,10 @@ router.post("/:id/comments", authenticate, async (req, res, next) => {
   }
 });
 
-// ── POST /api/announcements (admin only) ──────────────────────
-router.post("/", authenticate, authorize("admin"), async (req, res, next) => {
+// ── POST /api/announcements ───────────────────────────────────
+// admin/career_advisor → auto-publish
+// alumni              → pending approval (is_published=false)
+router.post("/", authenticate, authorize(...POSTER_ROLES), async (req, res, next) => {
   try {
     const { title, content, category, target_audience = "all" } = req.body;
 
@@ -96,6 +132,9 @@ router.post("/", authenticate, authorize("admin"), async (req, res, next) => {
       return res.status(400).json({ error: `Category must be one of: ${VALID_CATEGORIES.join(", ")}.` });
     }
 
+    const role = req.profile?.role;
+    const autoPublish = APPROVER_ROLES.includes(role);
+
     const { data, error } = await supabase
       .from("announcements")
       .insert({
@@ -104,13 +143,68 @@ router.post("/", authenticate, authorize("admin"), async (req, res, next) => {
         category,
         target_audience,
         posted_by:      req.user.id,
-        is_published:   true,
+        is_published:   autoPublish,
       })
-      .select("id, title, content, category, created_at")
+      .select("id, title, content, category, created_at, is_published")
       .single();
 
     if (error) throw error;
-    res.status(201).json(data);
+    res.status(201).json({
+      ...data,
+      pending_approval: !autoPublish,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── PATCH /api/announcements/:id/approve (approvers only) ─────
+router.patch("/:id/approve", authenticate, authorize(...APPROVER_ROLES), async (req, res, next) => {
+  try {
+    const { data, error } = await supabase
+      .from("announcements")
+      .update({ is_published: true })
+      .eq("id", req.params.id)
+      .select("id, title, content, category, created_at, is_published")
+      .single();
+
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: "Announcement not found." });
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── DELETE /api/announcements/:id ─────────────────────────────
+// approvers can reject/delete any; authors can delete their own pending ones
+router.delete("/:id", authenticate, async (req, res, next) => {
+  try {
+    const { data: existing, error: fetchErr } = await supabase
+      .from("announcements")
+      .select("id, posted_by, is_published")
+      .eq("id", req.params.id)
+      .single();
+
+    if (fetchErr || !existing) {
+      return res.status(404).json({ error: "Announcement not found." });
+    }
+
+    const role = req.profile?.role;
+    const isApprover = APPROVER_ROLES.includes(role);
+    const isOwnPending = existing.posted_by === req.user.id && !existing.is_published;
+
+    if (!isApprover && !isOwnPending) {
+      return res.status(403).json({ error: "Insufficient permissions." });
+    }
+
+    const { error } = await supabase
+      .from("announcements")
+      .delete()
+      .eq("id", req.params.id);
+
+    if (error) throw error;
+    res.json({ success: true });
   } catch (err) {
     next(err);
   }

@@ -3,7 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
 import {
   Megaphone, MessageCircle, Send, ChevronDown, ChevronUp,
-  Plus, X, Loader2, Mail,
+  Plus, X, Loader2, Mail, Check, Clock, Trash2,
 } from "lucide-react";
 
 const CATEGORIES = ["All", "Event", "Career Fair", "Campus News", "Mentorship"];
@@ -245,7 +245,7 @@ function MessageAdminModal({ onClose }) {
   );
 }
 
-function PostAnnouncementModal({ onClose, onPosted }) {
+function PostAnnouncementModal({ onClose, onPosted, needsApproval }) {
   const VALID_CATEGORIES = ["Event", "Career Fair", "Campus News", "Mentorship"];
   const [form, setForm] = useState({ title: "", content: "", category: "Event" });
   const [posting, setPosting] = useState(false);
@@ -277,6 +277,12 @@ function PostAnnouncementModal({ onClose, onPosted }) {
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
         </div>
+        {needsApproval && (
+          <div className="mx-5 mt-4 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-start gap-2">
+            <Clock size={14} className="flex-shrink-0 mt-0.5" />
+            <span>Your announcement will be reviewed by an admin or career advisor before it becomes visible to everyone.</span>
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Title <span className="text-red-500">*</span></label>
@@ -327,7 +333,7 @@ function PostAnnouncementModal({ onClose, onPosted }) {
   );
 }
 
-function AnnouncementCard({ announcement, isAdmin }) {
+function AnnouncementCard({ announcement, canMessageAdmin }) {
   const [expanded, setExpanded] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [showMessageAdmin, setShowMessageAdmin] = useState(false);
@@ -380,7 +386,7 @@ function AnnouncementCard({ announcement, isAdmin }) {
             <MessageCircle size={14} />
             Comment
           </button>
-          {!isAdmin && (
+          {canMessageAdmin && (
             <button
               onClick={() => setShowMessageAdmin(true)}
               className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-600 transition-colors"
@@ -400,34 +406,177 @@ function AnnouncementCard({ announcement, isAdmin }) {
   );
 }
 
+function PendingApprovalCard({ announcement, onApprove, onReject, busy }) {
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-amber-200 p-5">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 flex items-center gap-1">
+              <Clock size={10} /> Pending Review
+            </span>
+            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${CATEGORY_COLORS[announcement.category] || "bg-gray-100 text-gray-600"}`}>
+              {announcement.category}
+            </span>
+            <span className="text-xs text-gray-400">{timeAgo(announcement.created_at)}</span>
+          </div>
+          <h3 className="font-semibold text-gray-900 text-base leading-snug">{announcement.title}</h3>
+          {announcement.profiles && (
+            <p className="text-xs text-gray-500 mt-0.5">
+              Submitted by {announcement.profiles.first_name} {announcement.profiles.last_name}
+              {announcement.profiles.role && (
+                <span className="ml-1.5 capitalize text-gray-400">({announcement.profiles.role})</span>
+              )}
+            </p>
+          )}
+        </div>
+        <Megaphone size={20} className="text-amber-400 flex-shrink-0 mt-0.5" />
+      </div>
+
+      <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+        {announcement.content}
+      </p>
+
+      <div className="flex items-center gap-2 mt-4 pt-3 border-t border-gray-50">
+        <button
+          onClick={() => onApprove(announcement.id)}
+          disabled={busy}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 disabled:opacity-50 transition"
+        >
+          <Check size={13} /> Approve & Publish
+        </button>
+        <button
+          onClick={() => onReject(announcement.id)}
+          disabled={busy}
+          className="flex items-center gap-1.5 px-3 py-1.5 border border-red-200 text-red-600 rounded-lg text-xs font-medium hover:bg-red-50 disabled:opacity-50 transition"
+        >
+          <Trash2 size={13} /> Reject
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MyPendingCard({ announcement, onCancel, busy }) {
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-amber-200 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 flex items-center gap-1">
+              <Clock size={10} /> Awaiting Approval
+            </span>
+            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${CATEGORY_COLORS[announcement.category] || "bg-gray-100 text-gray-600"}`}>
+              {announcement.category}
+            </span>
+            <span className="text-xs text-gray-400">{timeAgo(announcement.created_at)}</span>
+          </div>
+          <p className="text-sm font-semibold text-gray-900">{announcement.title}</p>
+          <p className="text-xs text-gray-500 line-clamp-2 mt-0.5">{announcement.content}</p>
+        </div>
+        <button
+          onClick={() => onCancel(announcement.id)}
+          disabled={busy}
+          title="Cancel submission"
+          className="text-gray-400 hover:text-red-500 disabled:opacity-50 flex-shrink-0"
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function AnnouncementsPage() {
   const { profile } = useAuth();
-  const isAdmin = profile?.role === "admin";
+  const role = profile?.role;
+  const isApprover = role === "admin" || role === "career_advisor" || role === "faculty";
+  const canPost = isApprover || role === "alumni";
+  const isAlumni = role === "alumni";
 
   const [announcements, setAnnouncements] = useState([]);
+  const [pending, setPending] = useState([]);
+  const [myPending, setMyPending] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState("All");
   const [showPostModal, setShowPostModal] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [view, setView] = useState("published"); // "published" | "pending"
 
   useEffect(() => {
-    api.get("/announcements", { params: { limit: 50 } })
-      .then(r => setAnnouncements(r.data || []))
-      .catch(() => setAnnouncements([]))
+    const calls = [api.get("/announcements", { params: { limit: 50 } })];
+    if (isApprover) calls.push(api.get("/announcements/pending"));
+    if (isAlumni)   calls.push(api.get("/announcements/mine"));
+
+    Promise.all(calls)
+      .then(results => {
+        setAnnouncements(results[0]?.data || []);
+        if (isApprover) setPending(results[1]?.data || []);
+        if (isAlumni)   setMyPending((results[1]?.data || []).filter(a => !a.is_published));
+      })
+      .catch(() => {
+        setAnnouncements([]);
+        setPending([]);
+        setMyPending([]);
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [isApprover, isAlumni]);
 
   const filtered = activeCategory === "All"
     ? announcements
     : announcements.filter(a => a.category === activeCategory);
 
   const handlePosted = (newAnnouncement) => {
-    setAnnouncements(prev => [newAnnouncement, ...prev]);
+    if (newAnnouncement.pending_approval) {
+      setMyPending(prev => [newAnnouncement, ...prev]);
+    } else {
+      setAnnouncements(prev => [newAnnouncement, ...prev]);
+    }
+  };
+
+  const handleApprove = async (id) => {
+    setActionBusy(true);
+    try {
+      const { data } = await api.patch(`/announcements/${id}/approve`);
+      setPending(prev => prev.filter(a => a.id !== id));
+      setAnnouncements(prev => [data, ...prev]);
+    } catch (err) {
+      alert(err.response?.data?.error || "Failed to approve.");
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handleReject = async (id) => {
+    if (!confirm("Reject and delete this submission?")) return;
+    setActionBusy(true);
+    try {
+      await api.delete(`/announcements/${id}`);
+      setPending(prev => prev.filter(a => a.id !== id));
+    } catch (err) {
+      alert(err.response?.data?.error || "Failed to reject.");
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handleCancelMine = async (id) => {
+    if (!confirm("Cancel this pending submission?")) return;
+    setActionBusy(true);
+    try {
+      await api.delete(`/announcements/${id}`);
+      setMyPending(prev => prev.filter(a => a.id !== id));
+    } catch (err) {
+      alert(err.response?.data?.error || "Failed to cancel.");
+    } finally {
+      setActionBusy(false);
+    }
   };
 
   return (
     <div className="max-w-2xl mx-auto">
       {/* Page Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Megaphone size={22} className="text-blue-600" />
@@ -435,60 +584,136 @@ export default function AnnouncementsPage() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">Stay updated with the latest news and events</p>
         </div>
-        {isAdmin && (
+        {canPost && (
           <button
             onClick={() => setShowPostModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition"
           >
             <Plus size={16} />
-            Post
+            {isAlumni ? "Submit" : "Post"}
           </button>
         )}
       </div>
 
-      {/* Category Tabs */}
-      <div className="flex gap-2 mb-5 overflow-x-auto pb-1">
-        {CATEGORIES.map(cat => (
+      {/* Approver tab switcher */}
+      {isApprover && (
+        <div className="flex gap-2 mb-5 border-b border-gray-200">
           <button
-            key={cat}
-            onClick={() => setActiveCategory(cat)}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-              activeCategory === cat
-                ? "bg-blue-600 text-white"
-                : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+            onClick={() => setView("published")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition ${
+              view === "published" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
           >
-            {cat}
+            Published
           </button>
-        ))}
-      </div>
+          <button
+            onClick={() => setView("pending")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition flex items-center gap-1.5 ${
+              view === "pending" ? "border-amber-600 text-amber-700" : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Pending Review
+            {pending.length > 0 && (
+              <span className="bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                {pending.length}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
 
-      {/* Content */}
-      {loading ? (
-        <div className="flex items-center justify-center py-16 text-gray-400">
-          <Loader2 size={24} className="animate-spin mr-2" />
-          Loading announcements…
+      {/* Alumni: own pending submissions */}
+      {isAlumni && myPending.length > 0 && view === "published" && (
+        <div className="mb-6">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+            Your pending submissions
+          </p>
+          <div className="space-y-2">
+            {myPending.map(a => (
+              <MyPendingCard key={a.id} announcement={a} onCancel={handleCancelMine} busy={actionBusy} />
+            ))}
+          </div>
         </div>
-      ) : filtered.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
-          <Megaphone size={40} className="mx-auto mb-3 opacity-30" />
-          <p className="font-medium">No announcements yet</p>
-          {activeCategory !== "All" && (
-            <p className="text-sm mt-1">Try switching to a different category</p>
-          )}
-        </div>
+      )}
+
+      {/* Approver pending queue */}
+      {isApprover && view === "pending" ? (
+        loading ? (
+          <div className="flex items-center justify-center py-16 text-gray-400">
+            <Loader2 size={24} className="animate-spin mr-2" />
+            Loading…
+          </div>
+        ) : pending.length === 0 ? (
+          <div className="text-center py-16 text-gray-400">
+            <Check size={40} className="mx-auto mb-3 opacity-30" />
+            <p className="font-medium">All caught up</p>
+            <p className="text-sm mt-1">No announcements awaiting review</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {pending.map(a => (
+              <PendingApprovalCard
+                key={a.id}
+                announcement={a}
+                onApprove={handleApprove}
+                onReject={handleReject}
+                busy={actionBusy}
+              />
+            ))}
+          </div>
+        )
       ) : (
-        <div className="space-y-4">
-          {filtered.map(a => (
-            <AnnouncementCard key={a.id} announcement={a} isAdmin={isAdmin} />
-          ))}
-        </div>
+        <>
+          {/* Category Tabs */}
+          <div className="flex gap-2 mb-5 overflow-x-auto pb-1">
+            {CATEGORIES.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                  activeCategory === cat
+                    ? "bg-blue-600 text-white"
+                    : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          {/* Content */}
+          {loading ? (
+            <div className="flex items-center justify-center py-16 text-gray-400">
+              <Loader2 size={24} className="animate-spin mr-2" />
+              Loading announcements…
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-16 text-gray-400">
+              <Megaphone size={40} className="mx-auto mb-3 opacity-30" />
+              <p className="font-medium">No announcements yet</p>
+              {activeCategory !== "All" && (
+                <p className="text-sm mt-1">Try switching to a different category</p>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filtered.map(a => (
+                <AnnouncementCard
+                  key={a.id}
+                  announcement={a}
+                  canMessageAdmin={!isApprover}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {showPostModal && (
         <PostAnnouncementModal
           onClose={() => setShowPostModal(false)}
           onPosted={handlePosted}
+          needsApproval={isAlumni}
         />
       )}
     </div>

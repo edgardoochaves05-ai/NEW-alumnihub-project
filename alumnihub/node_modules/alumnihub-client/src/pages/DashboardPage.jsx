@@ -36,7 +36,7 @@ function CategoryBadge({ category }) {
 }
 
 // ── AnnouncementModal ───────────────────────────────────────────
-function AnnouncementModal({ onClose, onCreated }) {
+function AnnouncementModal({ onClose, onCreated, needsApproval }) {
   const [form, setForm] = useState({ title: "", content: "", category: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -69,13 +69,20 @@ function AnnouncementModal({ onClose, onCreated }) {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg"
         onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
-          <h2 className="text-lg font-bold text-gray-900">New Announcement</h2>
+          <h2 className="text-lg font-bold text-gray-900">
+            {needsApproval ? "Submit Announcement" : "New Announcement"}
+          </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X size={20} />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {needsApproval && (
+            <div className="px-4 py-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-lg">
+              Your announcement will be reviewed by an admin or career advisor before it becomes visible.
+            </div>
+          )}
           {error && (
             <div className="px-4 py-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg">
               {error}
@@ -130,7 +137,7 @@ function AnnouncementModal({ onClose, onCreated }) {
               className="btn-primary flex-1 flex items-center justify-center gap-2"
             >
               {saving && <Loader2 size={14} className="animate-spin" />}
-              <Bell size={14} /> Post Announcement
+              <Bell size={14} /> {needsApproval ? "Submit for Approval" : "Post Announcement"}
             </button>
           </div>
         </form>
@@ -186,6 +193,8 @@ function AlumniDashboard({ profile }) {
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedMatch, setExpandedMatch] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [pendingNotice, setPendingNotice] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -296,8 +305,18 @@ function AlumniDashboard({ profile }) {
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-gray-900">Announcements</h2>
-            <Bell size={16} className="text-gray-400" />
+            <button
+              onClick={() => setShowModal(true)}
+              className="btn-primary flex items-center gap-1.5 text-xs py-1.5 px-3"
+            >
+              <Plus size={13} /> Submit
+            </button>
           </div>
+          {pendingNotice && (
+            <div className="mb-3 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+              Submitted! An admin or career advisor will review it before publishing.
+            </div>
+          )}
           {announcements.length === 0 ? (
             <p className="text-gray-400 text-sm text-center py-6">No announcements yet.</p>
           ) : (
@@ -318,6 +337,18 @@ function AlumniDashboard({ profile }) {
           )}
         </div>
       </div>
+
+      {showModal && (
+        <AnnouncementModal
+          needsApproval
+          onClose={() => setShowModal(false)}
+          onCreated={() => {
+            setShowModal(false);
+            setPendingNotice(true);
+            setTimeout(() => setPendingNotice(false), 6000);
+          }}
+        />
+      )}
 
       {/* Top Job Matches */}
       {Array.isArray(data?.topMatches) && data.topMatches.length > 0 && (
@@ -401,15 +432,20 @@ function AdminDashboard({ profile }) {
   const [stats, setStats] = useState(null);
   const [trends, setTrends] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
+  const [pendingCount, setPendingCount] = useState(0);
   const [jobMetrics, setJobMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
 
   const fetchAnnouncements = () =>
-    api.get("/announcements?limit=4")
-      .then(({ data }) => {
-        const annList = Array.isArray(data) ? data : (data?.announcements || []);
+    Promise.all([
+      api.get("/announcements?limit=4"),
+      api.get("/announcements/pending").catch(() => ({ data: [] })),
+    ])
+      .then(([listRes, pendingRes]) => {
+        const annList = Array.isArray(listRes.data) ? listRes.data : (listRes.data?.announcements || []);
         setAnnouncements(Array.isArray(annList) ? annList : []);
+        setPendingCount(Array.isArray(pendingRes.data) ? pendingRes.data.length : 0);
       })
       .catch((err) => {
         console.error("Error loading announcements:", err);
@@ -608,12 +644,22 @@ function AdminDashboard({ profile }) {
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-gray-900">Announcements</h2>
-            <button
-              onClick={() => setShowModal(true)}
-              className="btn-primary flex items-center gap-1.5 text-xs py-1.5 px-3"
-            >
-              <Plus size={13} /> New Announcement
-            </button>
+            <div className="flex items-center gap-2">
+              {pendingCount > 0 && (
+                <Link
+                  to="/announcements"
+                  className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 hover:bg-amber-200 font-medium"
+                >
+                  {pendingCount} pending review
+                </Link>
+              )}
+              <button
+                onClick={() => setShowModal(true)}
+                className="btn-primary flex items-center gap-1.5 text-xs py-1.5 px-3"
+              >
+                <Plus size={13} /> New Announcement
+              </button>
+            </div>
           </div>
           {announcements.length === 0 ? (
             <p className="text-gray-400 text-sm text-center py-6">No announcements yet.</p>
@@ -704,20 +750,25 @@ function CareerAdvisorDashboard({ profile }) {
   const [totalStudents, setTotalStudents] = useState(0);
   const [totalPrograms, setTotalPrograms] = useState(0);
   const [announcements, setAnnouncements] = useState([]);
+  const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     Promise.all([
       api.get("/profiles/students?limit=1"),
       api.get("/analytics/programs"),
       api.get("/announcements?limit=5"),
+      api.get("/announcements/pending").catch(() => ({ data: [] })),
     ])
-      .then(([studentsRes, programsRes, annRes]) => {
+      .then(([studentsRes, programsRes, annRes, pendingRes]) => {
         setTotalStudents(studentsRes.data?.total || 0);
         setTotalPrograms(programsRes.data?.length || 0);
-        
+
         const annList = Array.isArray(annRes.data) ? annRes.data : (annRes.data?.announcements || []);
         setAnnouncements(Array.isArray(annList) ? annList : []);
+
+        setPendingCount(Array.isArray(pendingRes.data) ? pendingRes.data.length : 0);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -748,7 +799,22 @@ function CareerAdvisorDashboard({ profile }) {
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-gray-900">Announcements</h2>
-          <Bell size={16} className="text-gray-400" />
+          <div className="flex items-center gap-2">
+            {pendingCount > 0 && (
+              <Link
+                to="/announcements"
+                className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 hover:bg-amber-200 font-medium"
+              >
+                {pendingCount} pending review
+              </Link>
+            )}
+            <button
+              onClick={() => setShowModal(true)}
+              className="btn-primary flex items-center gap-1.5 text-xs py-1.5 px-3"
+            >
+              <Plus size={13} /> New Announcement
+            </button>
+          </div>
         </div>
         {announcements.length === 0 ? (
           <p className="text-gray-400 text-sm text-center py-6">No announcements yet.</p>
@@ -769,6 +835,16 @@ function CareerAdvisorDashboard({ profile }) {
           </div>
         )}
       </div>
+
+      {showModal && (
+        <AnnouncementModal
+          onClose={() => setShowModal(false)}
+          onCreated={(newAnnouncement) => {
+            setAnnouncements((prev) => [newAnnouncement, ...prev]);
+            setShowModal(false);
+          }}
+        />
+      )}
     </div>
   );
 }
