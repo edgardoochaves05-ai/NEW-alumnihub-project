@@ -124,16 +124,67 @@ function Field({ label, value, editing, name, onChange, type = "text", options, 
   );
 }
 
-function SkillsEditor({ skills }) {
+function SkillsEditor({ skills, editing, onAdd, onRemove }) {
+  const [draft, setDraft] = useState("");
+
+  const commit = () => {
+    const v = draft.trim();
+    if (!v) return;
+    onAdd?.(v);
+    setDraft("");
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      commit();
+    } else if (e.key === "Backspace" && !draft && skills?.length) {
+      onRemove?.(skills[skills.length - 1]);
+    }
+  };
+
   return (
-    <div className="flex flex-wrap gap-2">
-      {(skills || []).map((s) => (
-        <span key={s} className="inline-flex items-center px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
-          {s}
-        </span>
-      ))}
-      {(!skills || skills.length === 0) && (
-        <p className="text-sm text-gray-400 italic">Upload your resume to extract technical skills.</p>
+    <div>
+      <div className="flex flex-wrap gap-2">
+        {(skills || []).map((s) => (
+          <span key={s} className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
+            {s}
+            {editing && (
+              <button
+                type="button"
+                onClick={() => onRemove?.(s)}
+                className="text-blue-500 hover:text-red-600 transition-colors"
+                aria-label={`Remove ${s}`}
+              >
+                <X size={12} />
+              </button>
+            )}
+          </span>
+        ))}
+        {(!skills || skills.length === 0) && !editing && (
+          <p className="text-sm text-gray-400 italic">Upload your resume to extract technical skills, or click Edit to add your own.</p>
+        )}
+      </div>
+
+      {editing && (
+        <div className="mt-3 flex gap-2">
+          <input
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Type a skill and press Enter (e.g., React, SQL)"
+            className="input-field text-sm flex-1"
+          />
+          <button
+            type="button"
+            onClick={commit}
+            disabled={!draft.trim()}
+            className="btn-secondary text-sm flex items-center gap-1 disabled:opacity-50"
+          >
+            <Plus size={14} /> Add
+          </button>
+        </div>
       )}
     </div>
   );
@@ -1028,8 +1079,29 @@ export default function ProfilePage() {
       {showAlumniSections && (
         <div className="card">
           <SectionHeader icon={Tag} title="Technical Skills" />
-          <p className="text-xs text-gray-400 mb-3">Automatically extracted from your uploaded resume.</p>
-          <SkillsEditor skills={form.skills} />
+          <p className="text-xs text-gray-400 mb-3">
+            {isOwnProfile
+              ? "Initially extracted from your uploaded resume. Click Edit Profile to add or remove skills."
+              : "Skills listed by this alumni."}
+          </p>
+          <SkillsEditor
+            skills={form.skills}
+            editing={editing && isOwnProfile}
+            onAdd={(s) =>
+              setForm((p) => {
+                const exists = (p.skills || []).some(
+                  (x) => x.toLowerCase() === s.toLowerCase()
+                );
+                return exists ? p : { ...p, skills: [...(p.skills || []), s] };
+              })
+            }
+            onRemove={(s) =>
+              setForm((p) => ({
+                ...p,
+                skills: (p.skills || []).filter((x) => x !== s),
+              }))
+            }
+          />
         </div>
       )}
 

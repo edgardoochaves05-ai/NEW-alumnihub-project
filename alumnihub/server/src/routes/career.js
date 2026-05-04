@@ -502,24 +502,18 @@ Each milestone object must have:
 - skills_used (string array of technical skills used in this role)
 - milestone_type (one of: "job","promotion","certification","award","education","other")
 
-Skills extraction rules:
-- "skills" must be a list of professional competency areas — NOT individual tool names.
-- Group related technical skills found in the CV into clear professional labels. Examples:
-  - HTML, CSS, JavaScript, React, Vue, Angular → "Frontend Development"
-  - Node.js, Express, Python, Django, PHP, Laravel, Java, Spring Boot → "Backend Development"
-  - MySQL, PostgreSQL, MongoDB, Firebase, Supabase → "Database Management"
-  - AWS, Azure, GCP, Docker, Kubernetes, CI/CD, Linux → "Cloud & DevOps"
-  - Python, R, pandas, TensorFlow, machine learning, data analysis → "Data Science & Analytics"
-  - Swift, Kotlin, Android, iOS, React Native, Flutter → "Mobile Development"
-  - Figma, Adobe XD, Sketch, Wireframing → "UI/UX Design"
-  - Git, Jira, Agile, Scrum → "Project Management"
-  - Networking, cybersecurity, penetration testing → "Network & Security"
-  - Excel, SAP, QuickBooks, financial modeling, accounting software → "Financial & Accounting Tools"
-  - Photoshop, Illustrator, video editing, Canva → "Graphic Design"
-- If a skill does not fit any group above, create an appropriate short competency label for it.
-- Return at most 8 competency areas.
-- DO NOT include soft skills, personality traits ("leadership", "teamwork", "communication"), or vague terms ("computer literate", "internet", "Microsoft Office").
-- Return empty array if no technical skills are found.
+Skills extraction rules (BE CONSERVATIVE — quality over quantity):
+- ONLY extract technical skills that are EXPLICITLY HIGHLIGHTED by the candidate themselves in a dedicated "Skills", "Technical Skills", "Tools", "Technologies", or "Core Competencies" section of the CV.
+- DO NOT infer skills from job descriptions, role titles, responsibilities, or project narratives. If the candidate did not list it in their own skills section, do not add it.
+- DO NOT pad the list. It is far better to return 3 accurate skills than 30 over-extracted ones.
+- Return at most 12 skills total. If the highlighted section already lists fewer, return only those.
+- Each entry must be a concrete technical skill, tool, language, framework, platform, or technical methodology (e.g., "React", "SQL", "AWS", "Figma", "TensorFlow", "Agile/Scrum", "Penetration Testing").
+- Prefer the candidate's exact wording from their skills section. Normalize obvious variations (e.g., "Reactjs" → "React") but do not paraphrase.
+- Deduplicate case-insensitively and remove near-duplicates (e.g., "CRM" and "CRM tools" → keep one).
+- DO NOT include soft skills, personality traits, or behavioral attributes (e.g., "leadership", "teamwork", "communication", "problem-solving", "customer service", "client relationships", "time management", "organizational skills", "verbal/written communication", "team collaboration").
+- DO NOT include generic/vague terms ("computer literate", "basic computer literacy", "internet", "Microsoft Office", "computer skills").
+- DO NOT include domain knowledge phrases ("HIPAA", "patient confidentiality", "background checks", "appointment scheduling", "client inquiry management", "candidate sourcing", "interview scheduling") unless the candidate listed them in their skills section AND they represent a concrete tool or certified competency.
+- Return an empty array if the CV has no clear skills section or no technical skills are listed.
 
 General rules: Only include profile fields clearly stated in the CV. Do not guess. Return empty arrays/objects if nothing found.
 
