@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
+import { AnnouncementMenu } from "../components/AnnouncementsWidget";
 import {
   Megaphone, MessageCircle, Send, ChevronDown, ChevronUp,
-  Plus, X, Loader2, Mail, Check, Clock, Trash2,
+  Plus, X, Loader2, Mail, Check, Clock, Trash2, Pencil,
 } from "lucide-react";
 
 const CATEGORIES = ["All", "Event", "Career Fair", "Campus News", "Mentorship"];
@@ -245,9 +246,14 @@ function MessageAdminModal({ onClose }) {
   );
 }
 
-function PostAnnouncementModal({ onClose, onPosted, needsApproval }) {
+function PostAnnouncementModal({ onClose, onPosted, needsApproval, existing }) {
   const VALID_CATEGORIES = ["Event", "Career Fair", "Campus News", "Mentorship"];
-  const [form, setForm] = useState({ title: "", content: "", category: "Event" });
+  const isEdit = !!existing;
+  const [form, setForm] = useState({
+    title:    existing?.title    || "",
+    content:  existing?.content  || "",
+    category: existing?.category || "Event",
+  });
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState("");
 
@@ -257,11 +263,13 @@ function PostAnnouncementModal({ onClose, onPosted, needsApproval }) {
     setPosting(true);
     setError("");
     try {
-      const { data } = await api.post("/announcements", form);
+      const { data } = isEdit
+        ? await api.put(`/announcements/${existing.id}`, form)
+        : await api.post("/announcements", form);
       onPosted(data);
       onClose();
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to post announcement.");
+      setError(err.response?.data?.error || `Failed to ${isEdit ? "update" : "post"} announcement.`);
     } finally {
       setPosting(false);
     }
@@ -273,7 +281,7 @@ function PostAnnouncementModal({ onClose, onPosted, needsApproval }) {
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <Megaphone size={18} className="text-blue-600" />
-            <h2 className="font-semibold text-gray-900">Post Announcement</h2>
+            <h2 className="font-semibold text-gray-900">{isEdit ? "Edit Announcement" : "Post Announcement"}</h2>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
         </div>
@@ -324,7 +332,7 @@ function PostAnnouncementModal({ onClose, onPosted, needsApproval }) {
               className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
             >
               {posting ? <Loader2 size={14} className="animate-spin" /> : <Megaphone size={14} />}
-              Post
+              {isEdit ? "Save Changes" : "Post"}
             </button>
           </div>
         </form>
@@ -333,7 +341,7 @@ function PostAnnouncementModal({ onClose, onPosted, needsApproval }) {
   );
 }
 
-function AnnouncementCard({ announcement, canMessageAdmin }) {
+function AnnouncementCard({ announcement, canMessageAdmin, canManage, onEdit, onDelete }) {
   const [expanded, setExpanded] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [showMessageAdmin, setShowMessageAdmin] = useState(false);
@@ -361,7 +369,15 @@ function AnnouncementCard({ announcement, canMessageAdmin }) {
               </p>
             )}
           </div>
-          <Megaphone size={20} className="text-blue-400 flex-shrink-0 mt-0.5" />
+          <div className="flex items-start gap-1 flex-shrink-0">
+            <Megaphone size={20} className="text-blue-400 mt-0.5" />
+            {canManage && (
+              <AnnouncementMenu
+                onEdit={() => onEdit?.(announcement)}
+                onDelete={() => onDelete?.(announcement.id)}
+              />
+            )}
+          </div>
         </div>
 
         {/* Content */}
@@ -406,7 +422,7 @@ function AnnouncementCard({ announcement, canMessageAdmin }) {
   );
 }
 
-function PendingApprovalCard({ announcement, onApprove, onReject, busy }) {
+function PendingApprovalCard({ announcement, onApprove, onReject, onEdit, busy }) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-amber-200 p-5">
       <div className="flex items-start justify-between gap-3 mb-3">
@@ -430,7 +446,13 @@ function PendingApprovalCard({ announcement, onApprove, onReject, busy }) {
             </p>
           )}
         </div>
-        <Megaphone size={20} className="text-amber-400 flex-shrink-0 mt-0.5" />
+        <div className="flex items-start gap-1 flex-shrink-0">
+          <Megaphone size={20} className="text-amber-400 mt-0.5" />
+          <AnnouncementMenu
+            onEdit={() => onEdit?.(announcement)}
+            onDelete={() => onReject(announcement.id)}
+          />
+        </div>
       </div>
 
       <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
@@ -500,6 +522,7 @@ export default function AnnouncementsPage() {
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState("All");
   const [showPostModal, setShowPostModal] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [view, setView] = useState("published"); // "published" | "pending"
 
@@ -558,6 +581,26 @@ export default function AnnouncementsPage() {
     } finally {
       setActionBusy(false);
     }
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm("Delete this announcement? This cannot be undone.")) return;
+    setActionBusy(true);
+    try {
+      await api.delete(`/announcements/${id}`);
+      setAnnouncements(prev => prev.filter(a => a.id !== id));
+      setPending(prev => prev.filter(a => a.id !== id));
+    } catch (err) {
+      alert(err.response?.data?.error || "Failed to delete.");
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handleSaved = (saved) => {
+    const updater = (prev) => prev.map(a => a.id === saved.id ? { ...a, ...saved } : a);
+    setAnnouncements(updater);
+    setPending(updater);
   };
 
   const handleCancelMine = async (id) => {
@@ -657,6 +700,7 @@ export default function AnnouncementsPage() {
                 announcement={a}
                 onApprove={handleApprove}
                 onReject={handleReject}
+                onEdit={setEditing}
                 busy={actionBusy}
               />
             ))}
@@ -702,6 +746,9 @@ export default function AnnouncementsPage() {
                   key={a.id}
                   announcement={a}
                   canMessageAdmin={!isApprover}
+                  canManage={isApprover}
+                  onEdit={setEditing}
+                  onDelete={handleDelete}
                 />
               ))}
             </div>
@@ -714,6 +761,13 @@ export default function AnnouncementsPage() {
           onClose={() => setShowPostModal(false)}
           onPosted={handlePosted}
           needsApproval={isAlumni}
+        />
+      )}
+      {editing && (
+        <PostAnnouncementModal
+          existing={editing}
+          onClose={() => setEditing(null)}
+          onPosted={(saved) => { handleSaved(saved); setEditing(null); }}
         />
       )}
     </div>

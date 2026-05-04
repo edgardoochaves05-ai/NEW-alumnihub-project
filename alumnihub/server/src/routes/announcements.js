@@ -158,6 +158,41 @@ router.post("/", authenticate, authorize(...POSTER_ROLES), async (req, res, next
   }
 });
 
+// ── PUT /api/announcements/:id (approvers only) ───────────────
+router.put("/:id", authenticate, authorize(...APPROVER_ROLES), async (req, res, next) => {
+  try {
+    const { title, content, category } = req.body;
+    const updates = {};
+    if (title !== undefined) {
+      if (!title?.trim()) return res.status(400).json({ error: "Title cannot be empty." });
+      updates.title = title.trim();
+    }
+    if (content !== undefined) {
+      if (!content?.trim()) return res.status(400).json({ error: "Content cannot be empty." });
+      updates.content = content.trim();
+    }
+    if (category !== undefined) {
+      if (!VALID_CATEGORIES.includes(category)) {
+        return res.status(400).json({ error: `Category must be one of: ${VALID_CATEGORIES.join(", ")}.` });
+      }
+      updates.category = category;
+    }
+
+    const { data, error } = await supabase
+      .from("announcements")
+      .update(updates)
+      .eq("id", req.params.id)
+      .select("id, title, content, category, created_at, is_published, profiles!posted_by(first_name, last_name, role)")
+      .single();
+
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: "Announcement not found." });
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── PATCH /api/announcements/:id/approve (approvers only) ─────
 router.patch("/:id/approve", authenticate, authorize(...APPROVER_ROLES), async (req, res, next) => {
   try {

@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import api from "../services/api";
+import { useAuth } from "../context/AuthContext";
 import {
-  Megaphone, Plus, Check, Trash2, Loader2, X, Clock3,
+  Megaphone, Plus, Check, Trash2, Loader2, X, Clock3, MoreVertical, Pencil,
 } from "lucide-react";
 
 const CATEGORY_COLORS = {
@@ -25,9 +26,14 @@ function timeAgo(iso) {
   return new Date(iso).toLocaleDateString();
 }
 
-function PostAnnouncementModal({ onClose, onPosted }) {
+function PostAnnouncementModal({ onClose, onPosted, existing }) {
   const VALID_CATEGORIES = ["Event", "Career Fair", "Campus News", "Mentorship"];
-  const [form, setForm] = useState({ title: "", content: "", category: "Event" });
+  const isEdit = !!existing;
+  const [form, setForm] = useState({
+    title:    existing?.title    || "",
+    content:  existing?.content  || "",
+    category: existing?.category || "Event",
+  });
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState("");
 
@@ -37,11 +43,13 @@ function PostAnnouncementModal({ onClose, onPosted }) {
     setPosting(true);
     setError("");
     try {
-      const { data } = await api.post("/announcements", form);
+      const { data } = isEdit
+        ? await api.put(`/announcements/${existing.id}`, form)
+        : await api.post("/announcements", form);
       onPosted(data);
       onClose();
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to post announcement.");
+      setError(err.response?.data?.error || `Failed to ${isEdit ? "update" : "post"} announcement.`);
     } finally {
       setPosting(false);
     }
@@ -53,7 +61,7 @@ function PostAnnouncementModal({ onClose, onPosted }) {
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <Megaphone size={18} className="text-blue-600" />
-            <h2 className="font-semibold text-gray-900">New Announcement</h2>
+            <h2 className="font-semibold text-gray-900">{isEdit ? "Edit Announcement" : "New Announcement"}</h2>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
         </div>
@@ -96,7 +104,7 @@ function PostAnnouncementModal({ onClose, onPosted }) {
               className="btn-primary flex items-center gap-2"
             >
               {posting ? <Loader2 size={14} className="animate-spin" /> : <Megaphone size={14} />}
-              Post
+              {isEdit ? "Save Changes" : "Post"}
             </button>
           </div>
         </form>
@@ -105,10 +113,62 @@ function PostAnnouncementModal({ onClose, onPosted }) {
   );
 }
 
+export function AnnouncementMenu({ onEdit, onDelete }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative flex-shrink-0">
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen(v => !v); }}
+        className="p-1 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+        aria-label="More actions"
+      >
+        <MoreVertical size={16} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-7 w-36 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1">
+          {onEdit && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setOpen(false); onEdit(); }}
+              className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+            >
+              <Pencil size={13} className="text-gray-500" /> Edit
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setOpen(false); onDelete(); }}
+              className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+            >
+              <Trash2 size={13} /> Delete
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AnnouncementsWidget() {
+  const { profile } = useAuth();
+  const role = profile?.role;
+  const canManage = role === "admin" || role === "career_advisor" || role === "faculty";
+
   const [recent, setRecent]   = useState([]);
   const [pending, setPending] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState("approved"); // "approved" | "pending"
   const [autoSwitched, setAutoSwitched] = useState(false);
@@ -150,6 +210,24 @@ export default function AnnouncementsWidget() {
     } catch (err) {
       alert(err.response?.data?.error || "Failed to reject.");
     } finally { setBusy(false); }
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm("Delete this announcement? This cannot be undone.")) return;
+    setBusy(true);
+    try {
+      await api.delete(`/announcements/${id}`);
+      setRecent(prev => prev.filter(a => a.id !== id));
+      setPending(prev => prev.filter(a => a.id !== id));
+    } catch (err) {
+      alert(err.response?.data?.error || "Failed to delete.");
+    } finally { setBusy(false); }
+  };
+
+  const handleSaved = (saved) => {
+    const updater = (prev) => prev.map(a => a.id === saved.id ? { ...a, ...saved } : a);
+    setRecent(updater);
+    setPending(updater);
   };
 
   return (
@@ -224,21 +302,29 @@ export default function AnnouncementsWidget() {
                     )}
                     <p className="text-xs text-gray-600 mt-1 whitespace-pre-wrap">{a.content}</p>
                   </div>
-                  <div className="flex flex-col gap-1 flex-shrink-0">
-                    <button
-                      onClick={() => handleApprove(a.id)}
-                      disabled={busy}
-                      className="px-2 py-1 bg-green-600 text-white rounded text-xs flex items-center gap-1 hover:bg-green-700 disabled:opacity-50"
-                    >
-                      <Check size={11} /> Approve
-                    </button>
-                    <button
-                      onClick={() => handleReject(a.id)}
-                      disabled={busy}
-                      className="px-2 py-1 border border-red-200 text-red-600 rounded text-xs flex items-center gap-1 hover:bg-red-50 disabled:opacity-50"
-                    >
-                      <Trash2 size={11} /> Decline
-                    </button>
+                  <div className="flex items-start gap-1 flex-shrink-0">
+                    <div className="flex flex-col gap-1">
+                      <button
+                        onClick={() => handleApprove(a.id)}
+                        disabled={busy}
+                        className="px-2 py-1 bg-green-600 text-white rounded text-xs flex items-center gap-1 hover:bg-green-700 disabled:opacity-50"
+                      >
+                        <Check size={11} /> Approve
+                      </button>
+                      <button
+                        onClick={() => handleReject(a.id)}
+                        disabled={busy}
+                        className="px-2 py-1 border border-red-200 text-red-600 rounded text-xs flex items-center gap-1 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        <Trash2 size={11} /> Decline
+                      </button>
+                    </div>
+                    {canManage && (
+                      <AnnouncementMenu
+                        onEdit={() => setEditing(a)}
+                        onDelete={() => handleDelete(a.id)}
+                      />
+                    )}
                   </div>
                 </div>
               </div>
@@ -250,15 +336,23 @@ export default function AnnouncementsWidget() {
       ) : (
         <div className="divide-y divide-gray-100">
           {recent.map(a => (
-            <div key={a.id} className="py-3">
-              <div className="flex items-center gap-2 flex-wrap mb-1">
-                <p className="text-sm font-medium text-gray-900">{a.title}</p>
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${CATEGORY_COLORS[a.category] || "bg-gray-100 text-gray-600"}`}>
-                  {a.category}
-                </span>
+            <div key={a.id} className="py-3 flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <p className="text-sm font-medium text-gray-900">{a.title}</p>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${CATEGORY_COLORS[a.category] || "bg-gray-100 text-gray-600"}`}>
+                    {a.category}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 line-clamp-2">{a.content}</p>
+                <p className="text-xs text-gray-400 mt-1">{timeAgo(a.created_at)}</p>
               </div>
-              <p className="text-xs text-gray-500 line-clamp-2">{a.content}</p>
-              <p className="text-xs text-gray-400 mt-1">{timeAgo(a.created_at)}</p>
+              {canManage && (
+                <AnnouncementMenu
+                  onEdit={() => setEditing(a)}
+                  onDelete={() => handleDelete(a.id)}
+                />
+              )}
             </div>
           ))}
         </div>
@@ -268,6 +362,13 @@ export default function AnnouncementsWidget() {
         <PostAnnouncementModal
           onClose={() => setShowModal(false)}
           onPosted={(newAnn) => setRecent(prev => [newAnn, ...prev].slice(0, 4))}
+        />
+      )}
+      {editing && (
+        <PostAnnouncementModal
+          existing={editing}
+          onClose={() => setEditing(null)}
+          onPosted={handleSaved}
         />
       )}
     </div>
