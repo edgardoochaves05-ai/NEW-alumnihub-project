@@ -1,22 +1,52 @@
-import { Router } from "express";
-import { authenticate, authorize } from "../middleware/auth.js";
-import {
+const { Router } = require("express");
+const { authenticate, authorize } = require("../middleware/auth.js");
+const {
   generateCareerPredictions,
   computeJobMatches,
   generateCurriculumImpact,
   getAvailablePrograms,
   getOverallStats,
-} from "../services/ai/index.js";
-import { supabase } from "../config/supabase.js";
+} = require("../services/ai/index.js");
+const { supabase } = require("../config/supabase.js");
 
 const router = Router();
 
-// ── Dashboard Stats (Faculty/Admin) ──
-router.get("/dashboard", authenticate, authorize("faculty", "admin"), async (req, res, next) => {
+// Check if Supabase is available before processing requests
+router.use((req, res, next) => {
+  if (!supabase) {
+    return res.status(500).json({
+      error: "Database service unavailable. Check server configuration.",
+    });
+  }
+  next();
+});
+
+// ── Dashboard Stats (Admin + Career Advisor) ──
+router.get("/dashboard", authenticate, authorize("admin", "career_advisor", "faculty"), async (req, res, next) => {
   try {
+    console.log("[ANALYTICS] GET /dashboard - user:", req.user?.id, "role:", req.profile?.role);
     const stats = await getOverallStats();
-    res.json(stats);
+
+    // Student counts — surfaced for career advisors in the Reports page
+    const { data: studentRows, count: totalStudents } = await supabase
+      .from("profiles")
+      .select("program", { count: "exact" })
+      .eq("role", "student")
+      .eq("is_active", true);
+
+    const programMap = {};
+    for (const s of studentRows || []) {
+      const prog = s.program || "Unspecified";
+      programMap[prog] = (programMap[prog] || 0) + 1;
+    }
+    const studentsPerProgram = Object.entries(programMap)
+      .map(([program, count]) => ({ program, count }))
+      .sort((a, b) => b.count - a.count);
+
+    console.log("[ANALYTICS] Dashboard stats fetched");
+    res.json({ ...stats, totalStudents: totalStudents || 0, studentsPerProgram });
   } catch (err) {
+    console.error("[ANALYTICS] Dashboard error:", err.message);
     next(err);
   }
 });
@@ -95,8 +125,8 @@ router.get("/job-matches", authenticate, async (req, res, next) => {
   }
 });
 
-// ── Curriculum Impact Analytics (Faculty/Admin) ──
-router.get("/curriculum-impact", authenticate, authorize("faculty", "admin"), async (req, res, next) => {
+// ── Curriculum Impact Analytics (Career Advisor/Admin) ──
+router.get("/curriculum-impact", authenticate, authorize("admin", "career_advisor"), async (req, res, next) => {
   try {
     const { program, yearStart, yearEnd } = req.query;
     if (!program) return res.status(400).json({ error: "Program parameter is required" });
@@ -112,7 +142,7 @@ router.get("/curriculum-impact", authenticate, authorize("faculty", "admin"), as
 });
 
 // ── Available Programs ──
-router.get("/programs", authenticate, authorize("faculty", "admin"), async (req, res, next) => {
+router.get("/programs", authenticate, authorize("admin", "career_advisor"), async (req, res, next) => {
   try {
     const programs = await getAvailablePrograms();
     res.json(programs);
@@ -121,14 +151,69 @@ router.get("/programs", authenticate, authorize("faculty", "admin"), async (req,
   }
 });
 
-// ── Employment Trends ──
-router.get("/employment-trends", authenticate, authorize("faculty", "admin"), async (req, res, next) => {
+// ── Job Posting Metrics (Admin only) ──
+router.get("/job-metrics", authenticate, authorize("admin", "career_advisor"), async (req, res, next) => {
   try {
+    const { limit = 10 } = req.query;
+
+    // Fetch all interactions and active jobs in parallel
+    const [{ data: interactions }, { data: activeJobs }] = await Promise.all([
+      supabase.from("job_interactions").select("job_id, interaction_type"),
+      supabase
+        .from("job_listings")
+        .select("id, title, company, industry, job_type, created_at, is_active, posted_by")
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(100),
+    ]);
+
+    // Aggregate counts per job
+    const counts = {};
+    for (const { job_id, interaction_type } of interactions || []) {
+      if (!counts[job_id]) counts[job_id] = { views: 0, inquiries: 0 };
+      if (interaction_type === "view")    counts[job_id].views++;
+      if (interaction_type === "inquiry") counts[job_id].inquiries++;
+    }
+
+    // Merge metrics into job records
+    const allJobs = (activeJobs || []).map(job => ({
+      ...job,
+      views:      counts[job.id]?.views    || 0,
+      inquiries:  counts[job.id]?.inquiries || 0,
+      engagement: (counts[job.id]?.views || 0) + (counts[job.id]?.inquiries || 0),
+    }));
+
+    const totalViews     = Object.values(counts).reduce((s, c) => s + c.views, 0);
+    const totalInquiries = Object.values(counts).reduce((s, c) => s + c.inquiries, 0);
+
+    const top = (field) =>
+      [...allJobs].sort((a, b) => b[field] - a[field]).slice(0, parseInt(limit));
+
+    res.json({
+      summary: {
+        totalViews,
+        totalInquiries,
+        totalActiveJobs: allJobs.length,
+      },
+      topByViews:      top("views"),
+      topByInquiries:  top("inquiries"),
+      topByEngagement: top("engagement"),
+      allJobs,
+    });
+  } catch (err) { next(err); }
+});
+
+// ── Employment Trends ──
+router.get("/employment-trends", authenticate, authorize("admin", "career_advisor"), async (req, res, next) => {
+  try {
+    console.log("[ANALYTICS] GET /employment-trends - user:", req.user?.id);
     const { data: alumni } = await supabase
       .from("profiles")
       .select("graduation_year, industry, current_job_title, program")
       .eq("role", "alumni")
       .not("graduation_year", "is", null);
+
+    console.log("[ANALYTICS] Fetched", alumni?.length || 0, "alumni");
 
     const byYear = {};
     for (const alum of alumni || []) {
@@ -147,10 +232,11 @@ router.get("/employment-trends", authenticate, authorize("faculty", "admin"), as
       }))
       .sort((a, b) => a.year - b.year);
 
+    console.log("[ANALYTICS] Returning", trends.length, "year trends");
     res.json(trends);
   } catch (err) {
     next(err);
   }
 });
 
-export default router;
+module.exports = router;

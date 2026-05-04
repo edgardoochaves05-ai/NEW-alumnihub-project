@@ -83,7 +83,10 @@ function SectionHeader({ icon: Icon, title, action }) {
   );
 }
 
-function Field({ label, value, editing, name, onChange, type = "text", options, textarea, placeholder }) {
+function Field({ label, value, editing, name, onChange, type = "text", options, textarea, placeholder, isRequired }) {
+  const isEmpty = !value || String(value).trim() === "";
+  const displayLabel = editing && isRequired && isEmpty ? <>{label} <span className="text-red-500">*</span></> : label;
+
   if (!editing) {
     return (
       <div>
@@ -95,7 +98,7 @@ function Field({ label, value, editing, name, onChange, type = "text", options, 
   if (options) {
     return (
       <div>
-        <label className="label">{label}</label>
+        <label className="label">{displayLabel}</label>
         <select name={name} value={value} onChange={onChange} className="input-field bg-white">
           <option value="">— Select —</option>
           {options.map((o) => <option key={o} value={o}>{o}</option>)}
@@ -106,7 +109,7 @@ function Field({ label, value, editing, name, onChange, type = "text", options, 
   if (textarea) {
     return (
       <div>
-        <label className="label">{label}</label>
+        <label className="label">{displayLabel}</label>
         <textarea name={name} value={value} onChange={onChange} rows={3}
           className="input-field resize-none" placeholder={placeholder} />
       </div>
@@ -114,41 +117,74 @@ function Field({ label, value, editing, name, onChange, type = "text", options, 
   }
   return (
     <div>
-      <label className="label">{label}</label>
+      <label className="label">{displayLabel}</label>
       <input type={type} name={name} value={value} onChange={onChange}
         className="input-field" placeholder={placeholder} />
     </div>
   );
 }
 
-function SkillsEditor({ skills, editing, onAdd, onRemove, inputVal, setInputVal }) {
-  const handleKey = (e) => {
-    if ((e.key === "Enter" || e.key === ",") && inputVal.trim()) {
+function SkillsEditor({ skills, editing, onAdd, onRemove }) {
+  const [draft, setDraft] = useState("");
+
+  const commit = () => {
+    const v = draft.trim();
+    if (!v) return;
+    onAdd?.(v);
+    setDraft("");
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
-      onAdd(inputVal.trim());
-      setInputVal("");
+      commit();
+    } else if (e.key === "Backspace" && !draft && skills?.length) {
+      onRemove?.(skills[skills.length - 1]);
     }
   };
+
   return (
     <div>
-      <div className="flex flex-wrap gap-2 mb-2">
-        {skills.map((s) => (
+      <div className="flex flex-wrap gap-2">
+        {(skills || []).map((s) => (
           <span key={s} className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
             {s}
             {editing && (
-              <button onClick={() => onRemove(s)} className="hover:text-blue-900 ml-0.5">
-                <X size={11} />
+              <button
+                type="button"
+                onClick={() => onRemove?.(s)}
+                className="text-blue-500 hover:text-red-600 transition-colors"
+                aria-label={`Remove ${s}`}
+              >
+                <X size={12} />
               </button>
             )}
           </span>
         ))}
-        {skills.length === 0 && !editing && <p className="text-sm text-gray-400 italic">No skills added</p>}
+        {(!skills || skills.length === 0) && !editing && (
+          <p className="text-sm text-gray-400 italic">Upload your resume to extract technical skills, or click Edit to add your own.</p>
+        )}
       </div>
+
       {editing && (
-        <input
-          value={inputVal} onChange={(e) => setInputVal(e.target.value)} onKeyDown={handleKey}
-          className="input-field text-sm" placeholder="Type a skill and press Enter"
-        />
+        <div className="mt-3 flex gap-2">
+          <input
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Type a skill and press Enter (e.g., React, SQL)"
+            className="input-field text-sm flex-1"
+          />
+          <button
+            type="button"
+            onClick={commit}
+            disabled={!draft.trim()}
+            className="btn-secondary text-sm flex items-center gap-1 disabled:opacity-50"
+          >
+            <Plus size={14} /> Add
+          </button>
+        </div>
       )}
     </div>
   );
@@ -285,10 +321,20 @@ function MilestoneModal({ form, setForm, onSave, onClose, saving }) {
 
           <div>
             <label className="label">Skills Used</label>
-            <SkillsEditor
-              skills={form.skills_used} editing={true}
-              onAdd={addSkill} onRemove={removeSkill}
-              inputVal={skillInput} setInputVal={setSkillInput}
+            <div className="flex flex-wrap gap-2 mb-2">
+              {form.skills_used.map((s) => (
+                <span key={s} className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
+                  {s}
+                  <button onClick={() => removeSkill(s)} className="hover:text-blue-900 ml-0.5"><X size={11} /></button>
+                </span>
+              ))}
+            </div>
+            <input
+              value={skillInput}
+              onChange={(e) => setSkillInput(e.target.value)}
+              onKeyDown={(e) => { if ((e.key === "Enter" || e.key === ",") && skillInput.trim()) { e.preventDefault(); addSkill(skillInput.trim()); setSkillInput(""); } }}
+              className="input-field text-sm"
+              placeholder="Type a skill and press Enter"
             />
           </div>
         </div>
@@ -322,9 +368,6 @@ export default function ProfilePage() {
   const [saveError, setSaveError] = useState("");
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // Skills
-  const [skillInput, setSkillInput] = useState("");
-
   // Milestone modal
   const [milestoneModal, setMilestoneModal] = useState(false);
   const [milestoneForm, setMilestoneForm]   = useState(initMilestoneForm());
@@ -338,6 +381,7 @@ export default function ProfilePage() {
   const [avatarFile, setAvatarFile]       = useState(null);
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarImgError, setAvatarImgError] = useState(false);
 
   // Messaging
   const [msgModal, setMsgModal]   = useState(false);
@@ -352,9 +396,26 @@ export default function ProfilePage() {
   const [uploadMsg, setUploadMsg] = useState("");
   const [showResume, setShowResume] = useState(false);
 
+  // AI CV Parsing review
+  const [parsedRecord, setParsedRecord]             = useState(null);
+  const [reviewMilestones, setReviewMilestones]     = useState([]);
+  const [selectedMilestones, setSelectedMilestones] = useState(new Set());
+  const [confirmingCV, setConfirmingCV]             = useState(false);
+  const [confirmCVMsg, setConfirmCVMsg]             = useState("");
+  const [filledFields, setFilledFields]             = useState([]);
+  const [failedRecordId, setFailedRecordId]         = useState(null);
+  const [retrying, setRetrying]                     = useState(false);
+  const [cvDebug, setCvDebug]                       = useState(null);
+  const [cvDebugging, setCvDebugging]               = useState(false);
+
   useEffect(() => {
     loadProfile();
   }, [profileId]);
+
+  // Reset broken-image flag when the avatar URL changes (e.g. after CV upload)
+  useEffect(() => {
+    setAvatarImgError(false);
+  }, [profile?.avatar_url]);
 
   async function loadProfile() {
     setLoading(true);
@@ -437,13 +498,27 @@ export default function ProfilePage() {
     setAvatarPreview(URL.createObjectURL(file));
   }
 
-  const addSkill = (s) => {
-    if (s && !form.skills.includes(s)) setForm((p) => ({ ...p, skills: [...p.skills, s] }));
-  };
-  const removeSkill = (s) => setForm((p) => ({ ...p, skills: p.skills.filter((x) => x !== s) }));
 
   async function handleSave() {
     setSaving(true); setSaveError(""); setSaveSuccess(false);
+
+    // Validation for student and alumni accounts
+    if (profile?.role === "student" || profile?.role === "alumni") {
+      const requiredFields = [
+        "first_name", "last_name", "phone", "date_of_birth", "gender", "city", "address",
+        "student_number", "graduation_year", "batch_year", "department", "program"
+      ];
+      if (profile?.role === "alumni") {
+        requiredFields.push("current_job_title", "current_company", "industry");
+      }
+      const missingFields = requiredFields.filter(f => !form[f] || String(form[f]).trim() === "");
+      if (missingFields.length > 0) {
+        setSaveError("Please fill out all missing fields marked with * before saving.");
+        setSaving(false);
+        return;
+      }
+    }
+
     try {
       let avatarUrl = form.avatar_url;
 
@@ -488,7 +563,8 @@ export default function ProfilePage() {
       refreshProfile();
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (e) {
-      setSaveError(e.response?.data?.error || e.message || "Failed to save changes.");
+      const errorMsg = e.response?.data?.error || e.message || "Failed to save changes.";
+      setSaveError(typeof errorMsg === 'string' ? errorMsg : errorMsg.message || "Failed to save changes.");
       setUploadingAvatar(false);
     } finally {
       setSaving(false);
@@ -508,16 +584,16 @@ export default function ProfilePage() {
     setSendingMsg(true);
     setMsgError("");
     try {
-      // Faculty bypass: even for private profiles, go straight to inbox
-      const sendAsRequest = profile.is_private && authProfile?.role !== "faculty";
+      // Career Advisor bypass: even for private profiles, go straight to inbox
+      const sendAsRequest = profile.is_private && authProfile?.role !== "career_advisor";
       if (sendAsRequest) {
-        // Private profile (non-faculty sender) → message request
+        // Private profile (non-career_advisor sender) → message request
         await api.post("/message-requests", {
           recipientId: profileId,
           message: msgContent.trim() || undefined,
         });
       } else {
-        // Public profile OR faculty sender → deliver directly to inbox
+        // Public profile OR career_advisor sender → deliver directly to inbox
         await api.post("/messages", {
           recipientId: profileId,
           content: msgContent.trim(),
@@ -530,7 +606,8 @@ export default function ProfilePage() {
         setMsgSent(false);
       }, 2000);
     } catch (err) {
-      setMsgError(err.response?.data?.error || "Failed to send.");
+      const errorMsg = err.response?.data?.error || "Failed to send.";
+      setMsgError(typeof errorMsg === 'string' ? errorMsg : errorMsg.message || "Failed to send.");
     } finally {
       setSendingMsg(false);
     }
@@ -594,25 +671,178 @@ export default function ProfilePage() {
       setUploadMsg("Only PDF or DOCX files are accepted.");
       return;
     }
-    setUploading(true); setUploadMsg("");
+    setUploading(true);
+    setUploadMsg("");
+    setParsedRecord(null);
+    setReviewMilestones([]);
+    setSelectedMilestones(new Set());
+    setConfirmCVMsg("");
+    setFilledFields([]);
+    setFailedRecordId(null);
+
     try {
-      const reader = new FileReader();
-      reader.onload = async (ev) => {
-        const base64 = ev.target.result.split(",")[1];
-        await api.post("/career/upload-cv", {
-          fileBase64: base64,
+      // Upload directly to Supabase Storage from the browser — avoids the
+      // Vercel 4.5 MB serverless body limit that base64 JSON would hit.
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const filePath = `cvs/${user.id}/${Date.now()}_${safeName}`;
+
+      const { error: storageError } = await supabase.storage
+        .from("cv-uploads")
+        .upload(filePath, file, { contentType: file.type, upsert: false });
+
+      if (storageError) throw new Error(storageError.message || "Storage upload failed.");
+
+      const { data: urlData } = supabase.storage.from("cv-uploads").getPublicUrl(filePath);
+      const cvUrl = urlData.publicUrl;
+
+      try {
+        const { data } = await api.post("/career/upload-cv", {
+          cvUrl,
+          filePath,
           fileName: file.name,
           mimeType: file.type,
         });
-        setUploadMsg("CV uploaded! AI is processing your milestones.");
+
+        // Refresh profile first (updates cv_url in UI) before applying AI overrides
+        await loadProfile();
         setUploading(false);
-        loadProfile();
-      };
-      reader.readAsDataURL(file);
+
+        if (data.status === "parsed" && data.parsedData) {
+          const milestones = data.parsedData.milestones || [];
+
+          // Show which fields were auto-saved from the CV
+          if (data.parsedData.profile) {
+            const extracted = data.parsedData.profile;
+            const FIELD_LABELS = {
+              first_name: "First Name", last_name: "Last Name", phone: "Phone",
+              address: "Address", city: "City", current_job_title: "Job Title",
+              current_company: "Company", industry: "Industry",
+              linkedin_url: "LinkedIn URL", bio: "Bio",
+            };
+            const filled = Object.entries(FIELD_LABELS)
+              .filter(([field]) => extracted[field] && String(extracted[field]).trim())
+              .map(([, label]) => label);
+            if (data.parsedData.skills?.length) filled.push("Technical Skills");
+            if (extracted.avatar_url) filled.push("Profile Photo");
+            setFilledFields(filled);
+          }
+
+          if (milestones.length > 0) {
+            setParsedRecord({ id: data.parsedRecordId });
+            setReviewMilestones(milestones);
+            setSelectedMilestones(new Set(milestones.map((_, i) => i)));
+            setUploadMsg("CV parsed and profile updated! Review the extracted milestones below before confirming.");
+          } else {
+            setUploadMsg("CV parsed! Your profile has been updated automatically.");
+          }
+        } else {
+          if (data.status === "failed") {
+            setUploadMsg("CV uploaded but AI parsing failed.");
+            if (data.parsedRecordId) setFailedRecordId(data.parsedRecordId);
+          } else {
+            setUploadMsg("CV uploaded. No data was detected.");
+          }
+        }
+      } catch (innerErr) {
+        const errorMsg = innerErr.response?.data?.error || "Upload failed.";
+        setUploadMsg(typeof errorMsg === "string" ? errorMsg : "Upload failed.");
+        setUploading(false);
+      }
     } catch (err) {
-      setUploadMsg(err.response?.data?.error || "Upload failed.");
+      const errorMsg = err.message || err.response?.data?.error || "Upload failed.";
+      setUploadMsg(typeof errorMsg === "string" ? errorMsg : "Upload failed.");
       setUploading(false);
     }
+  }
+
+  async function handleRetryParse() {
+    if (!failedRecordId) return;
+    setRetrying(true);
+    setUploadMsg("Retrying AI parsing...");
+    try {
+      const { data } = await api.post(`/career/cv-parsed/${failedRecordId}/reparse`);
+      if (data.status === "parsed" && data.parsedData) {
+        await loadProfile();
+        setFailedRecordId(null);
+
+        const milestones = data.parsedData.milestones || [];
+        if (data.parsedData.profile) {
+          const extracted = data.parsedData.profile;
+          const FIELD_LABELS = {
+            first_name: "First Name", last_name: "Last Name", phone: "Phone",
+            address: "Address", city: "City", current_job_title: "Job Title",
+            current_company: "Company", industry: "Industry",
+            linkedin_url: "LinkedIn URL", bio: "Bio",
+          };
+          const filled = Object.entries(FIELD_LABELS)
+            .filter(([field]) => extracted[field] && String(extracted[field]).trim())
+            .map(([, label]) => label);
+          if (data.parsedData.skills?.length) filled.push("Technical Skills");
+          if (extracted.avatar_url) filled.push("Profile Photo");
+          setFilledFields(filled);
+        }
+
+        if (milestones.length > 0) {
+          setParsedRecord({ id: data.parsedRecordId });
+          setReviewMilestones(milestones);
+          setSelectedMilestones(new Set(milestones.map((_, i) => i)));
+          setUploadMsg("AI parsing succeeded! Review the extracted milestones below.");
+        } else {
+          setUploadMsg("AI parsing succeeded! Your profile has been updated.");
+        }
+      } else {
+        setUploadMsg("AI parsing failed again. Please try re-uploading your CV later.");
+      }
+    } catch (err) {
+      setUploadMsg("Retry failed. Please try re-uploading your CV.");
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  async function handleCvDebug(rerun = false) {
+    setCvDebugging(true);
+    setCvDebug(null);
+    try {
+      const { data } = await api.get(`/career/cv-debug${rerun ? "?rerun=1" : ""}`);
+      setCvDebug(data);
+    } catch (err) {
+      setCvDebug({ error: err.response?.data?.error || err.message });
+    } finally {
+      setCvDebugging(false);
+    }
+  }
+
+  async function handleConfirmCV() {
+    if (!parsedRecord?.id) return;
+    setConfirmingCV(true);
+    setConfirmCVMsg("");
+    try {
+      const toConfirm = reviewMilestones.filter((_, i) => selectedMilestones.has(i));
+      const { data } = await api.post(`/career/cv-parsed/${parsedRecord.id}/confirm`, {
+        milestones: toConfirm,
+      });
+      setConfirmCVMsg(`${data.milestones.length} milestone${data.milestones.length !== 1 ? "s" : ""} added to your profile.`);
+      setMilestones((prev) =>
+        [...data.milestones, ...prev].sort((a, b) => new Date(b.start_date || 0) - new Date(a.start_date || 0))
+      );
+      setParsedRecord(null);
+      setReviewMilestones([]);
+      setSelectedMilestones(new Set());
+    } catch (err) {
+      const errorMsg = err.response?.data?.error || "Failed to confirm milestones.";
+      setConfirmCVMsg(typeof errorMsg === "string" ? errorMsg : "Failed to confirm milestones.");
+    } finally {
+      setConfirmingCV(false);
+    }
+  }
+
+  function handleToggleMilestone(index) {
+    setSelectedMilestones((prev) => {
+      const next = new Set(prev);
+      next.has(index) ? next.delete(index) : next.add(index);
+      return next;
+    });
   }
 
   // ── Render ──────────────────────────────────────────────────────
@@ -633,10 +863,10 @@ export default function ProfilePage() {
   const showAlumniSections  = profile.role === "alumni" || profile.role === "student";
   const showProfessionalInfo = profile.role !== "student";
   const showMilestones       = profile.role === "alumni";
-  // Admin and Faculty always see full profiles regardless of privacy setting
-  const isPrivateOther = !isOwnProfile && !!profile.is_private && !["admin", "faculty"].includes(authProfile?.role);
-  // For messaging: Faculty bypass privacy → message goes straight to inbox, not requests
-  const isMsgRequest = !isOwnProfile && !!profile.is_private && authProfile?.role !== "faculty";
+  // Admin and Career Advisor always see full profiles regardless of privacy setting
+  const isPrivateOther = !isOwnProfile && !!profile.is_private && !["admin", "career_advisor"].includes(authProfile?.role);
+  // For messaging: Career Advisor bypass privacy → message goes straight to inbox, not requests
+  const isMsgRequest = !isOwnProfile && !!profile.is_private && authProfile?.role !== "career_advisor";
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -649,8 +879,8 @@ export default function ProfilePage() {
             <div className="w-20 h-20 rounded-2xl bg-blue-600 flex items-center justify-center text-white text-2xl font-bold overflow-hidden">
               {avatarPreview
                 ? <img src={avatarPreview} alt="Preview" className="w-20 h-20 object-cover"/>
-                : profile.avatar_url
-                  ? <img src={profile.avatar_url} alt={displayName} className="w-20 h-20 object-cover"/>
+                : profile.avatar_url && !avatarImgError
+                  ? <img src={profile.avatar_url} alt={displayName} className="w-20 h-20 object-cover" onError={() => setAvatarImgError(true)}/>
                   : initials}
             </div>
             {/* Camera overlay — only in edit mode */}
@@ -698,7 +928,7 @@ export default function ProfilePage() {
                 </span>
               )}
             </div>
-            <p className="text-sm text-gray-500 mt-0.5 capitalize">{profile.role}</p>
+            <p className="text-sm text-gray-500 mt-0.5 capitalize">{profile.role === "career_advisor" ? "career advisor" : profile.role}</p>
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-gray-500">
               {profile.current_job_title && (
@@ -798,15 +1028,15 @@ export default function ProfilePage() {
       <div className="card">
         <SectionHeader icon={User} title="Personal Information" />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="First Name"    value={form.first_name}   editing={editing} name="first_name"   onChange={handleFieldChange} placeholder="Juan" />
-          <Field label="Last Name"     value={form.last_name}    editing={editing} name="last_name"    onChange={handleFieldChange} placeholder="Dela Cruz" />
-          <Field label="Phone"         value={form.phone}        editing={editing} name="phone"        onChange={handleFieldChange} type="tel" placeholder="+63 912 345 6789" />
-          <Field label="Date of Birth" value={form.date_of_birth} editing={editing} name="date_of_birth" onChange={handleFieldChange} type="date" />
+          <Field label="First Name"    value={form.first_name}   editing={editing} name="first_name"   onChange={handleFieldChange} placeholder="Juan" isRequired={profile?.role === "student" || profile?.role === "alumni"} />
+          <Field label="Last Name"     value={form.last_name}    editing={editing} name="last_name"    onChange={handleFieldChange} placeholder="Dela Cruz" isRequired={profile?.role === "student" || profile?.role === "alumni"} />
+          <Field label="Phone"         value={form.phone}        editing={editing} name="phone"        onChange={handleFieldChange} type="tel" placeholder="+63 912 345 6789" isRequired={profile?.role === "student" || profile?.role === "alumni"} />
+          <Field label="Date of Birth" value={form.date_of_birth} editing={editing} name="date_of_birth" onChange={handleFieldChange} type="date" isRequired={profile?.role === "student" || profile?.role === "alumni"} />
           <Field label="Gender"        value={form.gender}       editing={editing} name="gender"       onChange={handleFieldChange}
-            options={["Male", "Female", "Non-binary", "Prefer not to say"]} />
-          <Field label="City"          value={form.city}         editing={editing} name="city"         onChange={handleFieldChange} placeholder="Quezon City" />
+            options={["Male", "Female", "Non-binary", "Prefer not to say"]} isRequired={profile?.role === "student" || profile?.role === "alumni"} />
+          <Field label="City"          value={form.city}         editing={editing} name="city"         onChange={handleFieldChange} placeholder="Quezon City" isRequired={profile?.role === "student" || profile?.role === "alumni"} />
           <div className="sm:col-span-2">
-            <Field label="Address"     value={form.address}      editing={editing} name="address"      onChange={handleFieldChange} placeholder="Street, Barangay" />
+            <Field label="Address"     value={form.address}      editing={editing} name="address"      onChange={handleFieldChange} placeholder="Street, Barangay" isRequired={profile?.role === "student" || profile?.role === "alumni"} />
           </div>
           <div className="sm:col-span-2">
             <Field label="Email"       value={profile.email}     editing={false} name="email" />
@@ -822,12 +1052,12 @@ export default function ProfilePage() {
         <div className="card">
           <SectionHeader icon={GraduationCap} title="Academic Information" />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Student Number"   value={form.student_number}  editing={editing} name="student_number"  onChange={handleFieldChange} placeholder="XXXX-XXXXX-MN-X" />
-            <Field label="Graduation Year"  value={form.graduation_year} editing={editing} name="graduation_year" onChange={handleFieldChange} type="number" placeholder="2023" />
-            <Field label="Batch Year"       value={form.batch_year}      editing={editing} name="batch_year"      onChange={handleFieldChange} type="number" placeholder="2019" />
-            <Field label="Department"       value={form.department}      editing={editing} name="department"      onChange={handleFieldChange} placeholder="College of IT" />
+            <Field label="Student Number"   value={form.student_number}  editing={editing} name="student_number"  onChange={handleFieldChange} placeholder="XXXX-XXXXX-MN-X" isRequired={profile?.role === "student" || profile?.role === "alumni"} />
+            <Field label="Graduation Year"  value={form.graduation_year} editing={editing} name="graduation_year" onChange={handleFieldChange} type="number" placeholder="2023" isRequired={profile?.role === "student" || profile?.role === "alumni"} />
+            <Field label="Batch Year"       value={form.batch_year}      editing={editing} name="batch_year"      onChange={handleFieldChange} type="number" placeholder="2019" isRequired={profile?.role === "student" || profile?.role === "alumni"} />
+            <Field label="Department"       value={form.department}      editing={editing} name="department"      onChange={handleFieldChange} placeholder="College of IT" isRequired={profile?.role === "student" || profile?.role === "alumni"} />
             <div className="sm:col-span-2">
-              <Field label="Program" value={form.program} editing={editing} name="program" onChange={handleFieldChange} options={PROGRAMS} />
+              <Field label="Program" value={form.program} editing={editing} name="program" onChange={handleFieldChange} options={PROGRAMS} isRequired={profile?.role === "student" || profile?.role === "alumni"} />
             </div>
           </div>
         </div>
@@ -838,9 +1068,9 @@ export default function ProfilePage() {
         <div className="card">
           <SectionHeader icon={Briefcase} title="Professional Information" />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Current Job Title"  value={form.current_job_title} editing={editing} name="current_job_title" onChange={handleFieldChange} placeholder="Software Engineer" />
-            <Field label="Current Company"    value={form.current_company}   editing={editing} name="current_company"   onChange={handleFieldChange} placeholder="Accenture Philippines" />
-            <Field label="Industry"           value={form.industry}          editing={editing} name="industry"          onChange={handleFieldChange} options={INDUSTRIES} />
+            <Field label="Current Job Title"  value={form.current_job_title} editing={editing} name="current_job_title" onChange={handleFieldChange} placeholder="Software Engineer" isRequired={profile?.role === "alumni"} />
+            <Field label="Current Company"    value={form.current_company}   editing={editing} name="current_company"   onChange={handleFieldChange} placeholder="Accenture Philippines" isRequired={profile?.role === "alumni"} />
+            <Field label="Industry"           value={form.industry}          editing={editing} name="industry"          onChange={handleFieldChange} options={INDUSTRIES} isRequired={profile?.role === "alumni"} />
           </div>
         </div>
       )}
@@ -848,11 +1078,29 @@ export default function ProfilePage() {
       {/* ── Skills (Alumni only) ── */}
       {showAlumniSections && (
         <div className="card">
-          <SectionHeader icon={Tag} title="Skills" />
+          <SectionHeader icon={Tag} title="Technical Skills" />
+          <p className="text-xs text-gray-400 mb-3">
+            {isOwnProfile
+              ? "Initially extracted from your uploaded resume. Click Edit Profile to add or remove skills."
+              : "Skills listed by this alumni."}
+          </p>
           <SkillsEditor
-            skills={form.skills} editing={editing}
-            onAdd={addSkill} onRemove={removeSkill}
-            inputVal={skillInput} setInputVal={setSkillInput}
+            skills={form.skills}
+            editing={editing && isOwnProfile}
+            onAdd={(s) =>
+              setForm((p) => {
+                const exists = (p.skills || []).some(
+                  (x) => x.toLowerCase() === s.toLowerCase()
+                );
+                return exists ? p : { ...p, skills: [...(p.skills || []), s] };
+              })
+            }
+            onRemove={(s) =>
+              setForm((p) => ({
+                ...p,
+                skills: (p.skills || []).filter((x) => x !== s),
+              }))
+            }
           />
         </div>
       )}
@@ -917,10 +1165,234 @@ export default function ProfilePage() {
           )}
 
           {uploadMsg && (
-            <p className={`mt-3 text-sm ${uploadMsg.includes("failed") || uploadMsg.includes("Only") ? "text-red-600" : "text-green-600"}`}>
-              {uploadMsg}
-            </p>
+            <div className="mt-3 flex items-center gap-3 flex-wrap">
+              <p className={`text-sm ${uploadMsg.toLowerCase().includes("failed") || uploadMsg.includes("Only") ? "text-red-600" : "text-green-600"}`}>
+                {uploadMsg}
+              </p>
+              {failedRecordId && (
+                <button
+                  onClick={handleRetryParse}
+                  disabled={retrying}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 disabled:opacity-60 transition-colors"
+                >
+                  {retrying ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                  {retrying ? "Retrying..." : "Retry AI Parsing"}
+                </button>
+              )}
+            </div>
           )}
+
+          {/* ── CV Debug Panel ── */}
+          {profile.cv_url && (
+            <div className="mt-3">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleCvDebug(false)}
+                  disabled={cvDebugging}
+                  className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 disabled:opacity-50"
+                >
+                  {cvDebugging ? <Loader2 size={11} className="animate-spin" /> : <FileText size={11} />}
+                  Check CV parsing
+                </button>
+                {cvDebug && !cvDebug.error && (
+                  <button
+                    onClick={() => handleCvDebug(true)}
+                    disabled={cvDebugging}
+                    className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 disabled:opacity-50"
+                  >
+                    {cvDebugging ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />}
+                    Re-run Gemini now
+                  </button>
+                )}
+                {cvDebug && (
+                  <button onClick={() => setCvDebug(null)} className="text-xs text-gray-300 hover:text-gray-500">hide</button>
+                )}
+              </div>
+
+              {cvDebug && (
+                <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs space-y-2">
+                  {cvDebug.error ? (
+                    <p className="text-red-600">{cvDebug.error}</p>
+                  ) : (
+                    <>
+                      <div className="flex flex-wrap gap-4">
+                        <span><span className="font-medium text-gray-500">Status:</span> <span className={cvDebug.status === "parsed" ? "text-green-600" : "text-red-500"}>{cvDebug.status}</span></span>
+                        <span><span className="font-medium text-gray-500">Text extracted:</span> {cvDebug.raw_text_length > 0 ? <span className="text-green-600">{cvDebug.raw_text_length.toLocaleString()} chars</span> : <span className="text-red-500">none (image-based PDF?)</span>}</span>
+                      </div>
+
+                      {cvDebug.raw_text_preview && (
+                        <div>
+                          <p className="font-medium text-gray-500 mb-1">Extracted text preview:</p>
+                          <pre className="whitespace-pre-wrap text-gray-700 bg-white border border-gray-100 rounded p-2 max-h-40 overflow-y-auto leading-relaxed">{cvDebug.raw_text_preview}</pre>
+                        </div>
+                      )}
+
+                      {cvDebug.stored_skills?.length > 0 && (
+                        <div>
+                          <p className="font-medium text-gray-500 mb-1">Stored skills:</p>
+                          <p className="text-gray-700">{cvDebug.stored_skills.join(", ")}</p>
+                        </div>
+                      )}
+
+                      {cvDebug.stored_milestones?.length > 0 && (
+                        <div>
+                          <p className="font-medium text-gray-500 mb-1">Stored milestones ({cvDebug.stored_milestones.length}):</p>
+                          <ul className="list-disc pl-4 text-gray-700 space-y-0.5">
+                            {cvDebug.stored_milestones.map((m, i) => (
+                              <li key={i}>{m.title}{m.company ? ` @ ${m.company}` : ""} ({m.start_date || "?"} – {m.end_date || "present"})</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {cvDebug.rerun && (
+                        <div className="border-t border-gray-200 pt-2 space-y-2">
+                          <p className="font-medium text-gray-500">Live Gemini result ({cvDebug.rerun.model_used} · {cvDebug.rerun.key_used}):</p>
+                          {cvDebug.rerun.error && <p className="text-red-500">Error: {cvDebug.rerun.error}</p>}
+                          {cvDebug.rerun.raw_response && (
+                            <div>
+                              <p className="font-medium text-gray-400 mb-1">Raw response:</p>
+                              <pre className="whitespace-pre-wrap text-gray-700 bg-white border border-gray-100 rounded p-2 max-h-60 overflow-y-auto leading-relaxed">{cvDebug.rerun.raw_response}</pre>
+                            </div>
+                          )}
+                          {cvDebug.rerun.parsed_result === null && cvDebug.rerun.raw_response && (
+                            <p className="text-amber-600">Response is not valid JSON — Gemini returned plain text instead of JSON.</p>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Auto-filled Profile Fields Banner ── */}
+          {filledFields.length > 0 && (
+            <div className="mt-3 flex items-start gap-2 px-3 py-2.5 bg-green-50 border border-green-200 rounded-lg">
+              <CheckCircle size={15} className="text-green-600 mt-0.5 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-green-800 mb-1">Auto-saved from your resume:</p>
+                <div className="flex flex-wrap gap-1">
+                  {filledFields.map(f => (
+                    <span key={f} className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{f}</span>
+                  ))}
+                </div>
+                <p className="text-xs text-green-600 mt-1.5">Your profile has been updated automatically.</p>
+              </div>
+              <button onClick={() => setFilledFields([])} className="text-green-400 hover:text-green-600 flex-shrink-0">
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
+          {/* ── AI Milestone Review Panel ── */}
+          {reviewMilestones.length > 0 && parsedRecord && (
+            <div className="mt-5 border border-blue-200 rounded-xl bg-blue-50 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <CheckCircle size={16} className="text-blue-600" />
+                  <h3 className="text-sm font-semibold text-blue-900">
+                    AI Extracted {reviewMilestones.length} Milestone{reviewMilestones.length !== 1 ? "s" : ""}
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-blue-700">
+                  <button onClick={() => setSelectedMilestones(new Set(reviewMilestones.map((_, i) => i)))} className="hover:underline">
+                    Select all
+                  </button>
+                  <span>·</span>
+                  <button onClick={() => setSelectedMilestones(new Set())} className="hover:underline">
+                    Deselect all
+                  </button>
+                </div>
+              </div>
+
+              <p className="text-xs text-blue-700 mb-3">
+                Review the milestones below. Uncheck any you don't want to add, then click Confirm.
+              </p>
+
+              <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                {reviewMilestones.map((m, i) => {
+                  const cfg = MILESTONE_COLORS[m.milestone_type] || MILESTONE_COLORS.other;
+                  const Icon = cfg.icon;
+                  const isSelected = selectedMilestones.has(i);
+                  return (
+                    <label
+                      key={i}
+                      className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                        isSelected ? "bg-white border-blue-300 shadow-sm" : "bg-blue-50/50 border-transparent opacity-60"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleToggleMilestone(i)}
+                        className="mt-0.5 w-4 h-4 rounded accent-blue-600 flex-shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${cfg.bg} ${cfg.text}`}>
+                            <Icon size={10} /> {m.milestone_type}
+                          </span>
+                          <span className="text-sm font-semibold text-gray-900 truncate">{m.title}</span>
+                        </div>
+                        {m.company && (
+                          <p className="text-xs text-gray-600 mt-0.5">
+                            {m.company}{m.location ? ` · ${m.location}` : ""}
+                          </p>
+                        )}
+                        {(m.start_date || m.end_date) && (
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {m.start_date || "?"} – {m.is_current ? "Present" : m.end_date || "?"}
+                          </p>
+                        )}
+                        {m.description && (
+                          <p className="text-xs text-gray-500 mt-1 leading-relaxed line-clamp-2">{m.description}</p>
+                        )}
+                        {m.skills_used?.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {m.skills_used.slice(0, 5).map((s) => (
+                              <span key={s} className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">{s}</span>
+                            ))}
+                            {m.skills_used.length > 5 && (
+                              <span className="text-xs text-gray-400">+{m.skills_used.length - 5} more</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div className="flex items-center justify-between mt-4 pt-3 border-t border-blue-200">
+                <p className="text-xs text-blue-700">{selectedMilestones.size} of {reviewMilestones.length} selected</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setParsedRecord(null); setReviewMilestones([]); setSelectedMilestones(new Set()); setConfirmCVMsg(""); }}
+                    className="btn-secondary text-sm py-1.5 px-3"
+                  >
+                    Dismiss
+                  </button>
+                  <button
+                    onClick={handleConfirmCV}
+                    disabled={confirmingCV || selectedMilestones.size === 0}
+                    className="btn-primary text-sm py-1.5 px-3 flex items-center gap-2"
+                  >
+                    {confirmingCV && <Loader2 size={13} className="animate-spin" />}
+                    Confirm {selectedMilestones.size > 0 ? `(${selectedMilestones.size})` : ""}
+                  </button>
+                </div>
+              </div>
+
+              {confirmCVMsg && (
+                <p className={`mt-2 text-xs ${confirmCVMsg.includes("Failed") ? "text-red-600" : "text-green-700"}`}>
+                  {confirmCVMsg}
+                </p>
+              )}
+            </div>
+          )}
+
           <p className="mt-2 text-xs text-gray-400">Accepted formats: PDF, DOCX. Max 10MB.</p>
         </div>
       )}

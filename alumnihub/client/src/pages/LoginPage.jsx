@@ -1,14 +1,35 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { authService } from "../services/api";
 import { GraduationCap, Eye, EyeOff, Loader2 } from "lucide-react";
 
+function Logo() {
+  const [imgFailed, setImgFailed] = useState(false);
+  if (!imgFailed) {
+    return (
+      <img
+        src="/logo.png"
+        alt="AlumniHub"
+        className="h-20 w-auto mx-auto"
+        onError={() => setImgFailed(true)}
+      />
+    );
+  }
+  return (
+    <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-600 rounded-2xl">
+      <GraduationCap size={28} className="text-white" />
+    </div>
+  );
+}
+
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [form, setForm] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const successMessage = location.state?.message;
 
   const handleChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -38,15 +59,23 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-600 rounded-2xl mb-4">
-            <GraduationCap size={28} className="text-white" />
+          <div className="mb-3">
+            <Logo />
           </div>
+          <p className="text-xs font-medium text-blue-600 tracking-wide mb-4">
+            Connecting Graduates&nbsp;&nbsp;|&nbsp;&nbsp;Empowering Futures
+          </p>
           <h1 className="text-2xl font-bold text-gray-900">Welcome back</h1>
           <p className="text-gray-500 mt-1 text-sm">Sign in to your AlumniHub account</p>
         </div>
 
         {/* Card */}
         <div className="card">
+          {successMessage && (
+            <div className="mb-4 px-4 py-3 bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg">
+              {successMessage}
+            </div>
+          )}
           {error && (
             <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg">
               {error}

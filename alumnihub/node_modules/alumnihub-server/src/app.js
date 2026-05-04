@@ -1,33 +1,83 @@
-import express from "express";
-import cors from "cors";
-import helmet from "helmet";
-import morgan from "morgan";
-import dotenv from "dotenv";
-import rateLimit from "express-rate-limit";
+const dotenv = require("dotenv");
+// Load env vars before any other imports so config modules see them
+dotenv.config();
 
-// Routes
-import authRoutes from "./routes/auth.js";
-import profileRoutes from "./routes/profiles.js";
-import careerRoutes from "./routes/career.js";
-import jobRoutes from "./routes/jobs.js";
-import messageRoutes from "./routes/messages.js";
-import analyticsRoutes from "./routes/analytics.js";
-import feedbackRoutes from "./routes/feedback.js";
-import messageRequestRoutes from "./routes/messageRequests.js";
-import announcementRoutes from "./routes/announcements.js";
+const express = require("express");
+const cors = require("cors");
+const helmet = require("helmet");
+const morgan = require("morgan");
+const rateLimit = require("express-rate-limit");
 
-dotenv.config({ path: "../.env" });
+// Routes - import them directly
+const authRoutes = require("./routes/auth.js");
+const profileRoutes = require("./routes/profiles.js");
+const careerRoutes = require("./routes/career.js");
+const jobRoutes = require("./routes/jobs.js");
+const messageRoutes = require("./routes/messages.js");
+const analyticsRoutes = require("./routes/analytics.js");
+const feedbackRoutes = require("./routes/feedback.js");
+const messageRequestRoutes = require("./routes/messageRequests.js");
+const announcementRoutes = require("./routes/announcements.js");
+const advisorRoutes = require("./routes/advisor.js");
+const adviceRoutes = require("./routes/advice.js");
+
+console.log("[APP] All routes imported successfully");
+
+// Config
+const { supabase, isSupabaseConfigured } = require("./config/supabase.js");
+
+console.log("[APP] Config imported");
+
 
 const app = express();
 
+// Trust proxy for Vercel and other reverse proxies
+app.set('trust proxy', 1);
+
+// Log startup
+console.log("✓ Express app created");
+console.log("✓ Supabase configured:", isSupabaseConfigured());
+
 // ── Middleware ──
 app.use(helmet());
+const allowedOrigins = (process.env.CLIENT_URL || "http://localhost:5173")
+  .split(",")
+  .map(o => o.trim())
+  .filter(Boolean);
+
 app.use(cors({
-  origin: process.env.CLIENT_URL || "http://localhost:5173",
+  origin: (origin, callback) => {
+    // Allow server-to-server requests (no origin header)
+    if (!origin) return callback(null, true);
+    // Allow exact matches from CLIENT_URL env var
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    // Allow any Vercel preview/production deployment URL
+    if (origin.endsWith(".vercel.app")) return callback(null, true);
+    callback(new Error(`CORS: origin ${origin} not allowed`));
+  },
   credentials: true,
 }));
 app.use(morgan("dev"));
 app.use(express.json({ limit: "10mb" }));
+
+// Request logging for debugging
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  next();
+});
+
+// ── Health Check (Public) ──
+app.get("/api/health", (req, res) => {
+  res.json({ 
+    status: "ok", 
+    timestamp: new Date().toISOString(),
+    supabaseConfigured: isSupabaseConfigured(),
+    environment: process.env.NODE_ENV,
+    supabaseUrl: process.env.SUPABASE_URL ? "✓ Set" : "✗ Missing",
+    supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY ? "✓ Set" : "✗ Missing",
+    clientUrl: process.env.CLIENT_URL || "not set",
+  });
+});
 
 // Rate limiting
 const limiter = rateLimit({
@@ -48,18 +98,39 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/message-requests", messageRequestRoutes);
 app.use("/api/announcements", announcementRoutes);
+app.use("/api/advisor", advisorRoutes);
+app.use("/api/advice", adviceRoutes);
 
-// Health check
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
-});
+console.log("[APP] Routes registered");
 
 // ── Error Handler ──
 app.use((err, req, res, next) => {
-  console.error("Server error:", err);
-  res.status(err.status || 500).json({
-    error: process.env.NODE_ENV === "development" ? err.message : "Internal server error",
+  console.error(`[ERROR] ${req.method} ${req.path}:`, err.message);
+  console.error("Stack:", err.stack);
+  
+  // Check if Supabase is not configured
+  if (!isSupabaseConfigured()) {
+    return res.status(500).json({
+      error: "Database configuration error",
+      details: "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing",
+      supabaseUrl: Boolean(process.env.SUPABASE_URL),
+      supabaseServiceKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+    });
+  }
+  
+  // If supabase is null, that's the problem
+  if (!supabase) {
+    return res.status(500).json({
+      error: "Database client not initialized",
+      details: "Supabase client is null despite env vars being set",
+    });
+  }
+  
+  res.status(err.status || err.statusCode || 500).json({
+    error: err.message || "Internal server error",
+    path: req.path,
+    method: req.method,
   });
 });
 
-export default app;
+module.exports = app;

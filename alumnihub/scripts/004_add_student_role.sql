@@ -3,14 +3,14 @@
 -- Run this in: Supabase Dashboard → SQL Editor
 -- ============================================================
 
--- Step 1: Drop the old CHECK constraint that only allowed alumni/faculty/admin
+-- Step 1: Drop the old CHECK constraint that only allowed alumni/career_advisor/admin
 ALTER TABLE profiles
   DROP CONSTRAINT IF EXISTS profiles_role_check;
 
 -- Step 2: Add the updated CHECK constraint that now includes 'student'
 ALTER TABLE profiles
   ADD CONSTRAINT profiles_role_check
-  CHECK (role IN ('alumni', 'faculty', 'admin', 'student'));
+  CHECK (role IN ('alumni', 'career_advisor', 'admin', 'student'));
 
 -- Step 3: Update the trigger function so it also validates 'student'
 --         (replaces the existing handle_new_user function)

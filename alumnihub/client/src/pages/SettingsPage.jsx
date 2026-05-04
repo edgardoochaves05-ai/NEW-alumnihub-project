@@ -57,7 +57,8 @@ export default function SettingsPage() {
       if (refreshProfile) await refreshProfile();
       setPrivacyMsg({ text: "Privacy setting updated.", type: "success" });
     } catch(err) {
-      setPrivacyMsg({ text: err.response?.data?.error || "Failed to update.", type: "error" });
+      const errorMsg = err.response?.data?.error || "Failed to update.";
+      setPrivacyMsg({ text: typeof errorMsg === 'string' ? errorMsg : errorMsg.message || "Failed to update.", type: "error" });
     } finally { setSavingPrivacy(false); }
   }
 
@@ -131,7 +132,7 @@ export default function SettingsPage() {
               <div>
                 <p className="text-sm font-medium text-gray-900">Private Profile</p>
                 <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
-                  When enabled, other alumni cannot find you in the directory. Faculty and admins can still view your profile. People who want to message you must send a request first.
+                  When enabled, other alumni cannot find you in the directory. Advisors and admins can still view your profile. People who want to message you must send a request first.
                 </p>
               </div>
             </div>

@@ -4,13 +4,16 @@ import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis,
-  CartesianGrid, Tooltip, ResponsiveContainer, Cell,
+  CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList,
 } from "recharts";
 import {
   Users, Briefcase, TrendingUp,
   Mail, Bell, ChevronRight, Award, BookOpen,
-  ArrowUpRight, Loader2, Plus, X,
+  ArrowUpRight, Loader2, Plus, X, Eye, Send,
+  Sparkles, ChevronDown, ChevronUp,
 } from "lucide-react";
+import JobMatchAnalytics from "../components/JobMatchAnalytics";
+import CareerAdviceWidget from "../components/CareerAdviceWidget";
 import { formatDistanceToNow } from "date-fns";
 
 // ── Category config ─────────────────────────────────────────────
@@ -33,7 +36,7 @@ function CategoryBadge({ category }) {
 }
 
 // ── AnnouncementModal ───────────────────────────────────────────
-function AnnouncementModal({ onClose, onCreated }) {
+function AnnouncementModal({ onClose, onCreated, needsApproval }) {
   const [form, setForm] = useState({ title: "", content: "", category: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -53,7 +56,8 @@ function AnnouncementModal({ onClose, onCreated }) {
       const { data } = await api.post("/announcements", form);
       onCreated(data);
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to post announcement.");
+      const errorMsg = err.response?.data?.error || "Failed to post announcement.";
+      setError(typeof errorMsg === 'string' ? errorMsg : errorMsg.message || "Failed to post announcement.");
     } finally {
       setSaving(false);
     }
@@ -65,13 +69,20 @@ function AnnouncementModal({ onClose, onCreated }) {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg"
         onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
-          <h2 className="text-lg font-bold text-gray-900">New Announcement</h2>
+          <h2 className="text-lg font-bold text-gray-900">
+            {needsApproval ? "Submit Announcement" : "New Announcement"}
+          </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X size={20} />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {needsApproval && (
+            <div className="px-4 py-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-lg">
+              Your announcement will be reviewed by an admin or career advisor before it becomes visible.
+            </div>
+          )}
           {error && (
             <div className="px-4 py-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg">
               {error}
@@ -126,7 +137,7 @@ function AnnouncementModal({ onClose, onCreated }) {
               className="btn-primary flex-1 flex items-center justify-center gap-2"
             >
               {saving && <Loader2 size={14} className="animate-spin" />}
-              <Bell size={14} /> Post Announcement
+              <Bell size={14} /> {needsApproval ? "Submit for Approval" : "Post Announcement"}
             </button>
           </div>
         </form>
@@ -181,6 +192,9 @@ function AlumniDashboard({ profile }) {
   const [recentJobs, setRecentJobs] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [expandedMatch, setExpandedMatch] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [pendingNotice, setPendingNotice] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -189,11 +203,24 @@ function AlumniDashboard({ profile }) {
       api.get("/announcements?limit=5"),
     ])
       .then(([dashRes, jobsRes, announcementsRes]) => {
-        setData(dashRes.data);
-        setRecentJobs(jobsRes.data.jobs || []);
-        setAnnouncements(announcementsRes.data || []);
+        // Safely handle dashboard data
+        const dashboard = dashRes.data || {};
+        setData(dashboard);
+        
+        // Handle jobs - expect array or object with jobs property
+        const jobs = Array.isArray(jobsRes.data) ? jobsRes.data : (jobsRes.data?.jobs || []);
+        setRecentJobs(Array.isArray(jobs) ? jobs : []);
+        
+        // Handle announcements - expect array
+        const annList = Array.isArray(announcementsRes.data) ? announcementsRes.data : (announcementsRes.data?.announcements || []);
+        setAnnouncements(Array.isArray(annList) ? annList : []);
       })
-      .catch(console.error)
+      .catch((err) => {
+        console.error("Error loading alumni dashboard:", err);
+        setData({});
+        setRecentJobs([]);
+        setAnnouncements([]);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -278,8 +305,18 @@ function AlumniDashboard({ profile }) {
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-gray-900">Announcements</h2>
-            <Bell size={16} className="text-gray-400" />
+            <button
+              onClick={() => setShowModal(true)}
+              className="btn-primary flex items-center gap-1.5 text-xs py-1.5 px-3"
+            >
+              <Plus size={13} /> Submit
+            </button>
           </div>
+          {pendingNotice && (
+            <div className="mb-3 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+              Submitted! An admin or career advisor will review it before publishing.
+            </div>
+          )}
           {announcements.length === 0 ? (
             <p className="text-gray-400 text-sm text-center py-6">No announcements yet.</p>
           ) : (
@@ -301,49 +338,119 @@ function AlumniDashboard({ profile }) {
         </div>
       </div>
 
+      {showModal && (
+        <AnnouncementModal
+          needsApproval
+          onClose={() => setShowModal(false)}
+          onCreated={() => {
+            setShowModal(false);
+            setPendingNotice(true);
+            setTimeout(() => setPendingNotice(false), 6000);
+          }}
+        />
+      )}
+
       {/* Top Job Matches */}
-      {data?.topMatches?.length > 0 && (
+      {Array.isArray(data?.topMatches) && data.topMatches.length > 0 && (
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="font-semibold text-gray-900">AI Job Matches</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Ranked by compatibility with your profile</p>
-            </div>
-            <Link to="/jobs" className="text-sm text-blue-600 hover:underline">View all</Link>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {data.topMatches.map(({ match_score, job_listings: job }) => (
-              <div key={job.id} className="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
-                    {Math.round(match_score)}% match
-                  </span>
-                </div>
-                <p className="text-sm font-medium text-gray-900 truncate">{job.title}</p>
-                <p className="text-xs text-gray-500 truncate">{job.company}</p>
+              <div className="flex items-center gap-2 mb-0.5">
+                <Sparkles size={15} className="text-blue-600"/>
+                <h2 className="font-semibold text-gray-900">AI Job Matches</h2>
               </div>
-            ))}
+              <p className="text-xs text-gray-500">
+                Ranked by compatibility with your profile · click a card to see why
+              </p>
+            </div>
+            <Link to="/jobs" className="text-sm text-blue-600 hover:underline flex items-center gap-1">
+              View all <ChevronRight size={14}/>
+            </Link>
           </div>
+
+          {/* ── Clickable match cards ── */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {data.topMatches.map(({ match_score, job_listings: job }) => {
+              const pct = Math.round(match_score > 1 ? match_score : match_score * 100);
+              const isExpanded = expandedMatch === job.id;
+              const scoreBadge =
+                pct >= 75 ? "text-green-700 bg-green-50 border-green-200" :
+                pct >= 50 ? "text-blue-700 bg-blue-50 border-blue-200"   :
+                "text-gray-600 bg-gray-50 border-gray-200";
+              const cardBorder = isExpanded
+                ? "border-blue-400 bg-blue-50/30 shadow-sm"
+                : "border-gray-200 hover:border-blue-300 hover:bg-gray-50/50";
+              return (
+                <button
+                  key={job.id}
+                  onClick={() => setExpandedMatch(isExpanded ? null : job.id)}
+                  className={`text-left p-3.5 border rounded-xl transition-all ${cardBorder}`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full border ${scoreBadge}`}>
+                      <Sparkles size={9}/>{pct}% match
+                    </span>
+                    {isExpanded
+                      ? <ChevronUp size={13} className="text-blue-500 flex-shrink-0"/>
+                      : <ChevronDown size={13} className="text-gray-400 flex-shrink-0"/>}
+                  </div>
+                  <p className="text-sm font-semibold text-gray-900 truncate">{job.title}</p>
+                  <p className="text-xs text-gray-500 truncate">{job.company}</p>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* ── Expanded analytics panel ── */}
+          {expandedMatch && (() => {
+            const match = data.topMatches.find(m => m.job_listings.id === expandedMatch);
+            if (!match) return null;
+            return (
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  {match.job_listings.title} · {match.job_listings.company}
+                </p>
+                <JobMatchAnalytics
+                  job={match.job_listings}
+                  profile={profile}
+                  matchScore={match.match_score}
+                  mode="full"
+                />
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>
   );
 }
 
-// ── Faculty / Admin Dashboard ──────────────────────────────────
+// ── Admin Dashboard ──────────────────────────────────
 const CHART_COLORS = ["#2563eb", "#16a34a", "#9333ea", "#d97706", "#dc2626"];
 
-function FacultyAdminDashboard({ profile }) {
+function AdminDashboard({ profile }) {
   const [stats, setStats] = useState(null);
   const [trends, setTrends] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [jobMetrics, setJobMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
 
   const fetchAnnouncements = () =>
-    api.get("/announcements?limit=4")
-      .then(({ data }) => setAnnouncements(data || []))
-      .catch(console.error);
+    Promise.all([
+      api.get("/announcements?limit=4"),
+      api.get("/announcements/pending").catch(() => ({ data: [] })),
+    ])
+      .then(([listRes, pendingRes]) => {
+        const annList = Array.isArray(listRes.data) ? listRes.data : (listRes.data?.announcements || []);
+        setAnnouncements(Array.isArray(annList) ? annList : []);
+        setPendingCount(Array.isArray(pendingRes.data) ? pendingRes.data.length : 0);
+      })
+      .catch((err) => {
+        console.error("Error loading announcements:", err);
+        setAnnouncements([]);
+      });
 
   useEffect(() => {
     Promise.all([
@@ -351,13 +458,27 @@ function FacultyAdminDashboard({ profile }) {
       api.get("/analytics/employment-trends"),
     ])
       .then(([statsRes, trendsRes]) => {
-        setStats(statsRes.data);
-        setTrends(trendsRes.data || []);
+        // Safely handle stats
+        const statsData = (statsRes.data && typeof statsRes.data === 'object') ? statsRes.data : {};
+        setStats(statsData);
+        
+        // Safely handle trends - expect array
+        const trendsList = Array.isArray(trendsRes.data) ? trendsRes.data : (trendsRes.data?.trends || []);
+        setTrends(Array.isArray(trendsList) ? trendsList : []);
       })
-      .catch(console.error)
+      .catch((err) => {
+        console.error("Error loading dashboard stats and trends:", err);
+        setStats({});
+        setTrends([]);
+      })
       .finally(() => setLoading(false));
 
     fetchAnnouncements();
+
+    // Non-critical: job metrics widget
+    api.get("/analytics/job-metrics?limit=5")
+      .then(({ data }) => setJobMetrics(data))
+      .catch(() => {});
   }, []);
 
   if (loading) {
@@ -435,6 +556,48 @@ function FacultyAdminDashboard({ profile }) {
         </div>
       </div>
 
+      {/* Alumni per Program — full width bar chart */}
+      {topPrograms.length > 0 && (
+        <div className="card">
+          <h2 className="font-semibold text-gray-900 mb-1">Alumni per Program</h2>
+          <p className="text-xs text-gray-500 mb-4">Total number of registered alumni in each program</p>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart
+              data={topPrograms}
+              margin={{ top: 24, right: 16, left: -20, bottom: 48 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis
+                dataKey="program"
+                tick={{ fontSize: 10 }}
+                angle={-30}
+                textAnchor="end"
+                interval={0}
+                tickFormatter={(v) => v.replace("BS ", "").replace("Bachelor of Science in ", "")}
+              />
+              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+              <Tooltip
+                formatter={(v, _name, props) => [
+                  `${v} alumni`,
+                  props.payload?.program,
+                ]}
+              />
+              <Bar dataKey="total" radius={[4, 4, 0, 0]} name="Alumni">
+                {topPrograms.map((_, i) => (
+                  <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                ))}
+                {/* Exact count label on top of each bar */}
+                <LabelList
+                  dataKey="total"
+                  position="top"
+                  style={{ fontSize: 12, fontWeight: 700, fill: "#374151" }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
       {/* Bottom row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Program table */}
@@ -481,12 +644,22 @@ function FacultyAdminDashboard({ profile }) {
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-gray-900">Announcements</h2>
-            <button
-              onClick={() => setShowModal(true)}
-              className="btn-primary flex items-center gap-1.5 text-xs py-1.5 px-3"
-            >
-              <Plus size={13} /> New Announcement
-            </button>
+            <div className="flex items-center gap-2">
+              {pendingCount > 0 && (
+                <Link
+                  to="/announcements"
+                  className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 hover:bg-amber-200 font-medium"
+                >
+                  {pendingCount} pending review
+                </Link>
+              )}
+              <button
+                onClick={() => setShowModal(true)}
+                className="btn-primary flex items-center gap-1.5 text-xs py-1.5 px-3"
+              >
+                <Plus size={13} /> New Announcement
+              </button>
+            </div>
           </div>
           {announcements.length === 0 ? (
             <p className="text-gray-400 text-sm text-center py-6">No announcements yet.</p>
@@ -509,7 +682,160 @@ function FacultyAdminDashboard({ profile }) {
         </div>
       </div>
 
+      {/* Job Posting Engagement */}
+      {jobMetrics && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <div>
+              <h2 className="font-semibold text-gray-900">Job Posting Engagement</h2>
+              <p className="text-xs text-gray-500 mt-0.5">Top listings by views and application inquiries</p>
+            </div>
+            <div className="flex items-center gap-4 flex-shrink-0">
+              <span className="flex items-center gap-1.5 text-xs text-gray-500">
+                <Eye size={13} className="text-blue-500"/>{jobMetrics.summary.totalViews} views
+              </span>
+              <span className="flex items-center gap-1.5 text-xs text-gray-500">
+                <Send size={13} className="text-green-500"/>{jobMetrics.summary.totalInquiries} inquiries
+              </span>
+              <Link to="/reports" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                Full report <ChevronRight size={12}/>
+              </Link>
+            </div>
+          </div>
+          {jobMetrics.topByEngagement.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-6">No engagement data yet. Views are tracked when users open job listings.</p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {jobMetrics.topByEngagement.map((job, i) => (
+                <div key={job.id} className="py-3 flex items-center gap-3">
+                  <span className="text-xs font-bold text-gray-300 w-4 flex-shrink-0">#{i + 1}</span>
+                  <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+                    <Briefcase size={14} className="text-blue-600"/>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{job.title}</p>
+                    <p className="text-xs text-gray-500 truncate">{job.company}</p>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs flex-shrink-0">
+                    <span className="flex items-center gap-1 text-gray-500">
+                      <Eye size={11} className="text-blue-400"/>{job.views}
+                    </span>
+                    <span className="flex items-center gap-1 text-gray-500">
+                      <Send size={11} className="text-green-400"/>{job.inquiries}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Announcement Modal */}
+      {showModal && (
+        <AnnouncementModal
+          onClose={() => setShowModal(false)}
+          onCreated={(newAnnouncement) => {
+            setAnnouncements((prev) => [newAnnouncement, ...prev]);
+            setShowModal(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Career Advisor Dashboard ───────────────────────────────────
+function CareerAdvisorDashboard({ profile }) {
+  const [totalStudents, setTotalStudents] = useState(0);
+  const [totalPrograms, setTotalPrograms] = useState(0);
+  const [announcements, setAnnouncements] = useState([]);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      api.get("/profiles/students?limit=1"),
+      api.get("/analytics/programs"),
+      api.get("/announcements?limit=5"),
+      api.get("/announcements/pending").catch(() => ({ data: [] })),
+    ])
+      .then(([studentsRes, programsRes, annRes, pendingRes]) => {
+        setTotalStudents(studentsRes.data?.total || 0);
+        setTotalPrograms(programsRes.data?.length || 0);
+
+        const annList = Array.isArray(annRes.data) ? annRes.data : (annRes.data?.announcements || []);
+        setAnnouncements(Array.isArray(annList) ? annList : []);
+
+        setPendingCount(Array.isArray(pendingRes.data) ? pendingRes.data.length : 0);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 size={28} className="animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Career Advisor Dashboard</h1>
+        <p className="text-gray-500 mt-1 text-sm">
+          Welcome, {profile?.first_name || "Advisor"}! Here's an overview of your students.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <StatCard icon={Users} label="Total Students" value={totalStudents} color="blue" to="/students" />
+        <StatCard icon={BookOpen} label="Active Programs" value={totalPrograms} color="green" />
+      </div>
+
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold text-gray-900">Announcements</h2>
+          <div className="flex items-center gap-2">
+            {pendingCount > 0 && (
+              <Link
+                to="/announcements"
+                className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 hover:bg-amber-200 font-medium"
+              >
+                {pendingCount} pending review
+              </Link>
+            )}
+            <button
+              onClick={() => setShowModal(true)}
+              className="btn-primary flex items-center gap-1.5 text-xs py-1.5 px-3"
+            >
+              <Plus size={13} /> New Announcement
+            </button>
+          </div>
+        </div>
+        {announcements.length === 0 ? (
+          <p className="text-gray-400 text-sm text-center py-6">No announcements yet.</p>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {announcements.map((a) => (
+              <div key={a.id} className="py-3">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <p className="text-sm font-medium text-gray-900">{a.title}</p>
+                  <CategoryBadge category={a.category} />
+                </div>
+                <p className="text-xs text-gray-500 line-clamp-2">{a.content}</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {showModal && (
         <AnnouncementModal
           onClose={() => setShowModal(false)}
@@ -545,13 +871,16 @@ function StudentDashboard({ profile }) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">
-          Welcome, {profile?.first_name || "Student"}!
-        </h1>
-        <p className="text-gray-500 mt-1 text-sm">
-          {new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Welcome, {profile?.first_name || "Student"}!
+          </h1>
+          <p className="text-gray-500 mt-1 text-sm">
+            {new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+          </p>
+        </div>
+        <CareerAdviceWidget />
       </div>
 
       <div className="card">
@@ -584,9 +913,21 @@ function StudentDashboard({ profile }) {
 
 // ── Main Export ────────────────────────────────────────────────
 export default function DashboardPage() {
-  const { profile, isAlumni } = useAuth();
+  const { profile, loading, isAlumni, isAdmin, isCareerAdvisor } = useAuth();
 
-  if (profile?.role === "student") return <StudentDashboard profile={profile} />;
+  if (loading || !profile) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 size={28} className="animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  if (profile.role === "student") return <StudentDashboard profile={profile} />;
   if (isAlumni) return <AlumniDashboard profile={profile} />;
-  return <FacultyAdminDashboard profile={profile} />;
+  if (isAdmin) return <AdminDashboard profile={profile} />;
+  if (isCareerAdvisor) return <CareerAdvisorDashboard profile={profile} />;
+
+  // Unknown role — show alumni view as safe default
+  return <AlumniDashboard profile={profile} />;
 }

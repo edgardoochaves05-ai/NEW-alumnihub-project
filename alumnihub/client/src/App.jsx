@@ -15,7 +15,18 @@ import ReportsPage from "./pages/ReportsPage";
 import CareerPredictionPage from "./pages/CareerPredictionPage";
 import CurriculumImpactPage from "./pages/CurriculumImpactPage";
 import SettingsPage from "./pages/SettingsPage";
-import FacultyDirectoryPage from "./pages/FacultyDirectoryPage";
+import AdvisorRosterPage from "./pages/AdvisorRosterPage";
+import StudentCareerPathPage from "./pages/StudentCareerPathPage";
+import AdvisorManagementPage from "./pages/AdvisorManagementPage";
+import CareerAdvicePage from "./pages/CareerAdvicePage";
+
+// Redirect career_advisor from /dashboard → their roster
+function DashboardRoute() {
+  const { profile } = useAuth();
+  const effectiveRole = profile?.role === "faculty" ? "career_advisor" : profile?.role;
+  if (effectiveRole === "career_advisor") return <Navigate to="/advisor/roster" replace />;
+  return <DashboardPage />;
+}
 
 // Protected route wrapper
 function ProtectedRoute({ children, allowedRoles }) {
@@ -23,7 +34,8 @@ function ProtectedRoute({ children, allowedRoles }) {
 
   if (loading) return <div className="flex items-center justify-center h-screen">Loading...</div>;
   if (!user) return <Navigate to="/login" />;
-  if (allowedRoles && !allowedRoles.includes(profile?.role)) {
+  const effectiveRole = profile?.role === "faculty" ? "career_advisor" : profile?.role;
+  if (allowedRoles && !allowedRoles.includes(effectiveRole)) {
     return <Navigate to="/dashboard" />;
   }
 
@@ -42,57 +54,48 @@ function AppRoutes() {
       {/* Protected routes */}
       <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route index element={<Navigate to="/dashboard" />} />
-        <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="dashboard" element={<DashboardRoute />} />
 
-        {/* Profile — Alumni, Student, Faculty */}
+        {/* Profile — Alumni and Student */}
         <Route
           path="profile"
           element={
-            <ProtectedRoute allowedRoles={["alumni", "student", "faculty"]}>
+            <ProtectedRoute allowedRoles={["alumni", "student"]}>
               <ProfilePage />
             </ProtectedRoute>
           }
         />
         <Route path="profile/:id" element={<ProfilePage />} />
 
-        {/* Alumni Directory — Faculty and Admin only */}
+        {/* Alumni Directory — Admin only */}
         <Route
           path="alumni"
           element={
-            <ProtectedRoute allowedRoles={["faculty", "admin"]}>
+            <ProtectedRoute allowedRoles={["admin"]}>
               <AlumniListPage />
             </ProtectedRoute>
           }
         />
 
-        {/* Student Directory — Faculty and Admin only */}
+        {/* Student Directory — Admin + Career Advisor */}
         <Route
           path="students"
           element={
-            <ProtectedRoute allowedRoles={["faculty", "admin"]}>
+            <ProtectedRoute allowedRoles={["admin", "career_advisor"]}>
               <StudentDirectoryPage />
             </ProtectedRoute>
           }
         />
 
-        {/* Faculty Directory — Admin only */}
-        <Route
-          path="faculty-directory"
-          element={
-            <ProtectedRoute allowedRoles={["admin"]}>
-              <FacultyDirectoryPage />
-            </ProtectedRoute>
-          }
-        />
 
         {/* Jobs — all roles */}
         <Route path="jobs" element={<JobsPage />} />
 
-        {/* Inbox — Alumni, Student, and Faculty */}
+        {/* Inbox — Alumni, Student, Admin, Career Advisor */}
         <Route
           path="messages"
           element={
-            <ProtectedRoute allowedRoles={["alumni", "student", "faculty"]}>
+            <ProtectedRoute allowedRoles={["alumni", "student", "admin", "career_advisor"]}>
               <MessagesPage />
             </ProtectedRoute>
           }
@@ -102,37 +105,75 @@ function AppRoutes() {
         <Route
           path="settings"
           element={
-            <ProtectedRoute allowedRoles={["alumni", "student", "faculty", "admin"]}>
+            <ProtectedRoute allowedRoles={["alumni", "student", "admin", "career_advisor"]}>
               <SettingsPage />
             </ProtectedRoute>
           }
         />
 
-        {/* Career Prediction — Faculty and Admin only */}
+        {/* Career Advisor — Roster & Student Detail */}
+        <Route
+          path="advisor/roster"
+          element={
+            <ProtectedRoute allowedRoles={["career_advisor"]}>
+              <AdvisorRosterPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="advisor/student/:id"
+          element={
+            <ProtectedRoute allowedRoles={["career_advisor"]}>
+              <StudentCareerPathPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Advisor Management — Admin only */}
+        <Route
+          path="advisor-management"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <AdvisorManagementPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Career Prediction — Alumni only */}
         <Route
           path="career-prediction"
           element={
-            <ProtectedRoute allowedRoles={["faculty", "admin"]}>
+            <ProtectedRoute allowedRoles={["alumni"]}>
               <CareerPredictionPage />
             </ProtectedRoute>
           }
         />
 
-        {/* Reports — Faculty and Admin */}
+        {/* Career Advice — Student only */}
+        <Route
+          path="career-advice"
+          element={
+            <ProtectedRoute allowedRoles={["student"]}>
+              <CareerAdvicePage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Reports — Admin + Career Advisor */}
         <Route
           path="reports"
           element={
-            <ProtectedRoute allowedRoles={["faculty", "admin"]}>
+            <ProtectedRoute allowedRoles={["admin", "career_advisor"]}>
               <ReportsPage />
             </ProtectedRoute>
           }
         />
 
-        {/* Curriculum Impact — Faculty and Admin */}
+        {/* Curriculum Impact — Admin + Career Advisor */}
         <Route
           path="curriculum-impact"
           element={
-            <ProtectedRoute allowedRoles={["faculty", "admin"]}>
+            <ProtectedRoute allowedRoles={["admin", "career_advisor"]}>
               <CurriculumImpactPage />
             </ProtectedRoute>
           }

@@ -1,7 +1,7 @@
 /**
- * One-time script: creates the AlumniHub faculty account via Supabase Admin API.
+ * One-time script: creates the AlumniHub career advisor account via Supabase Admin API.
  * Run from the alumnihub/ directory:
- *   node scripts/create-faculty.mjs
+ *   node scripts/create-advisor.mjs
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -38,21 +38,21 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 });
 
 // ── Credentials ───────────────────────────────────────────────
-const FACULTY_EMAIL    = "faculty@alumnihub.com";
-const FACULTY_PASSWORD = "Faculty@Hub2026!";
+const ADVISOR_EMAIL    = "carla.reyes.advisor@tip.edu.ph";
+const ADVISOR_PASSWORD = "Advisor@Hub2026!";
 
 async function main() {
-  console.log("Creating faculty account…");
+  console.log("Creating Career Advisor account…");
 
   // 1. Create auth user (email pre-confirmed, no email sent)
   const { data: authData, error: authErr } = await supabase.auth.admin.createUser({
-    email: FACULTY_EMAIL,
-    password: FACULTY_PASSWORD,
+    email: ADVISOR_EMAIL,
+    password: ADVISOR_PASSWORD,
     email_confirm: true,
     user_metadata: {
-      role: "faculty",
-      first_name: "Faculty",
-      last_name: "AlumniHub",
+      role: "career_advisor", // Advisors function as career_advisor level accounts
+      first_name: "Carla",
+      last_name: "Reyes (Advisor)",
     },
   });
 
@@ -71,19 +71,19 @@ async function main() {
   const { data: { users }, error: listErr } = await supabase.auth.admin.listUsers();
   if (listErr) { console.error("listUsers error:", listErr.message); process.exit(1); }
 
-  const facultyUser = users.find((u) => u.email === FACULTY_EMAIL);
-  if (!facultyUser) { console.error("Faculty user not found after creation."); process.exit(1); }
+  const advisorUser = users.find((u) => u.email === ADVISOR_EMAIL);
+  if (!advisorUser) { console.error("Advisor user not found after creation."); process.exit(1); }
 
-  // 3. Upsert the profiles row with role = 'faculty'
+  // 3. Upsert the profiles row with role = 'career_advisor'
   const { error: profileErr } = await supabase
     .from("profiles")
     .upsert(
       {
-        id: facultyUser.id,
-        email: FACULTY_EMAIL,
-        role: "faculty",
-        first_name: "Faculty",
-        last_name: "AlumniHub",
+        id: advisorUser.id,
+        email: ADVISOR_EMAIL,
+        role: "career_advisor",
+        first_name: "Carla",
+        last_name: "Reyes (Advisor)",
       },
       { onConflict: "id" }
     );
@@ -93,11 +93,11 @@ async function main() {
     process.exit(1);
   }
 
-  console.log("\n✓ Faculty account ready.");
+  console.log("\n✓ Career Advisor account ready.");
   console.log("─────────────────────────────");
-  console.log("  Email   :", FACULTY_EMAIL);
-  console.log("  Password:", FACULTY_PASSWORD);
-  console.log("  Role    : faculty");
+  console.log("  Email   :", ADVISOR_EMAIL);
+  console.log("  Password:", ADVISOR_PASSWORD);
+  console.log("  Role    : career_advisor");
   console.log("─────────────────────────────");
   console.log("Log in at http://localhost:5173/login");
 }
