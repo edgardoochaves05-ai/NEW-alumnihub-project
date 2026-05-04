@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import JobMatchAnalytics from "../components/JobMatchAnalytics";
 import CareerAdviceWidget from "../components/CareerAdviceWidget";
+import AnnouncementsWidget from "../components/AnnouncementsWidget";
 import { formatDistanceToNow } from "date-fns";
 
 // ── Category config ─────────────────────────────────────────────
@@ -431,26 +432,8 @@ const CHART_COLORS = ["#2563eb", "#16a34a", "#9333ea", "#d97706", "#dc2626"];
 function AdminDashboard({ profile }) {
   const [stats, setStats] = useState(null);
   const [trends, setTrends] = useState([]);
-  const [announcements, setAnnouncements] = useState([]);
-  const [pendingCount, setPendingCount] = useState(0);
   const [jobMetrics, setJobMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-
-  const fetchAnnouncements = () =>
-    Promise.all([
-      api.get("/announcements?limit=4"),
-      api.get("/announcements/pending").catch(() => ({ data: [] })),
-    ])
-      .then(([listRes, pendingRes]) => {
-        const annList = Array.isArray(listRes.data) ? listRes.data : (listRes.data?.announcements || []);
-        setAnnouncements(Array.isArray(annList) ? annList : []);
-        setPendingCount(Array.isArray(pendingRes.data) ? pendingRes.data.length : 0);
-      })
-      .catch((err) => {
-        console.error("Error loading announcements:", err);
-        setAnnouncements([]);
-      });
 
   useEffect(() => {
     Promise.all([
@@ -458,11 +441,9 @@ function AdminDashboard({ profile }) {
       api.get("/analytics/employment-trends"),
     ])
       .then(([statsRes, trendsRes]) => {
-        // Safely handle stats
         const statsData = (statsRes.data && typeof statsRes.data === 'object') ? statsRes.data : {};
         setStats(statsData);
-        
-        // Safely handle trends - expect array
+
         const trendsList = Array.isArray(trendsRes.data) ? trendsRes.data : (trendsRes.data?.trends || []);
         setTrends(Array.isArray(trendsList) ? trendsList : []);
       })
@@ -473,9 +454,6 @@ function AdminDashboard({ profile }) {
       })
       .finally(() => setLoading(false));
 
-    fetchAnnouncements();
-
-    // Non-critical: job metrics widget
     api.get("/analytics/job-metrics?limit=5")
       .then(({ data }) => setJobMetrics(data))
       .catch(() => {});
@@ -640,46 +618,8 @@ function AdminDashboard({ profile }) {
           )}
         </div>
 
-        {/* Announcements */}
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-gray-900">Announcements</h2>
-            <div className="flex items-center gap-2">
-              {pendingCount > 0 && (
-                <Link
-                  to="/announcements"
-                  className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 hover:bg-amber-200 font-medium"
-                >
-                  {pendingCount} pending review
-                </Link>
-              )}
-              <button
-                onClick={() => setShowModal(true)}
-                className="btn-primary flex items-center gap-1.5 text-xs py-1.5 px-3"
-              >
-                <Plus size={13} /> New Announcement
-              </button>
-            </div>
-          </div>
-          {announcements.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-6">No announcements yet.</p>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {announcements.map((a) => (
-                <div key={a.id} className="py-3">
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <p className="text-sm font-medium text-gray-900">{a.title}</p>
-                    <CategoryBadge category={a.category} />
-                  </div>
-                  <p className="text-xs text-gray-500 line-clamp-2">{a.content}</p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    {formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Announcements — shared widget with inline approve/decline */}
+        <AnnouncementsWidget />
       </div>
 
       {/* Job Posting Engagement */}
@@ -731,16 +671,6 @@ function AdminDashboard({ profile }) {
         </div>
       )}
 
-      {/* Announcement Modal */}
-      {showModal && (
-        <AnnouncementModal
-          onClose={() => setShowModal(false)}
-          onCreated={(newAnnouncement) => {
-            setAnnouncements((prev) => [newAnnouncement, ...prev]);
-            setShowModal(false);
-          }}
-        />
-      )}
     </div>
   );
 }
