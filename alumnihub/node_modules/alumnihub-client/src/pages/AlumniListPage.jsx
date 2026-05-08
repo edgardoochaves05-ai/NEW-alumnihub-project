@@ -44,7 +44,7 @@ function AlumniRow({ alumni }) {
       </td>
       <td className="px-5 py-4">
         <p className="text-sm text-gray-700">{alumni.current_job_title || "—"}</p>
-        {alumni.current_employer && <p className="text-xs text-gray-400">{alumni.current_employer}</p>}
+        {alumni.current_company && <p className="text-xs text-gray-400">{alumni.current_company}</p>}
       </td>
       <td className="px-5 py-4">
         <p className="text-sm text-gray-700">{alumni.industry || "—"}</p>

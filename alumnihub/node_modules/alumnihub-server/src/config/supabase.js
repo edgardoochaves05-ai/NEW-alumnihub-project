@@ -1,23 +1,29 @@
-import { createClient } from "@supabase/supabase-js";
-import dotenv from "dotenv";
+const { createClient } = require("@supabase/supabase-js");
 
-dotenv.config({ path: "../.env" });
-
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
+// Use SUPABASE_URL for server (not VITE_ prefix), fall back to VITE_ for local dev
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error("Missing Supabase environment variables. Check your .env file.");
+  console.warn("⚠️  Missing Supabase env vars — set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your environment.");
 }
 
 // Server-side client uses service role key for admin access
-export const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
+const supabase = supabaseUrl && supabaseServiceKey
+  ? createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+  : null;
+
+const isSupabaseConfigured = () => Boolean(supabaseUrl && supabaseServiceKey);
 
 // Create a client scoped to a specific user's JWT (for RLS)
-export function createUserClient(accessToken) {
-  return createClient(supabaseUrl, process.env.VITE_SUPABASE_ANON_KEY, {
+function createUserClient(accessToken) {
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !anonKey) return null;
+  return createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: `Bearer ${accessToken}` } },
   });
 }
+
+module.exports = { supabase, isSupabaseConfigured, createUserClient };

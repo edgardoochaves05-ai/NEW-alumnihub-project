@@ -1,6 +1,6 @@
-import { Router } from "express";
-import { authenticate, authorize } from "../middleware/auth.js";
-import { supabase } from "../config/supabase.js";
+const { Router } = require("express");
+const { authenticate, authorize } = require("../middleware/auth.js");
+const { supabase } = require("../config/supabase.js");
 
 const router = Router();
 
@@ -36,6 +36,28 @@ router.put("/me", authenticate, async (req, res, next) => {
       if (req.body[field] !== undefined) updates[field] = req.body[field];
     }
 
+    // Server-side required field validation
+    const { data: currentProfile } = await supabase
+      .from("profiles").select("*").eq("id", req.user.id).single();
+
+    const role = currentProfile?.role || req.profile?.role;
+    const REQUIRED_PERSONAL = ["first_name", "last_name", "phone", "date_of_birth", "gender", "city", "address"];
+    const REQUIRED_ACADEMIC = ["student_number", "program", "department", "graduation_year", "batch_year"];
+    const requiredFields = [
+      ...REQUIRED_PERSONAL,
+      ...(["alumni", "student"].includes(role) ? REQUIRED_ACADEMIC : []),
+    ];
+
+    const missing = requiredFields.filter(f => {
+      const val = updates[f] !== undefined ? updates[f] : currentProfile?.[f];
+      return val === undefined || val === null || val.toString().trim() === "";
+    });
+
+    if (missing.length > 0) {
+      const readable = missing.map(f => f.replace(/_/g, " ")).join(", ");
+      return res.status(400).json({ error: `Missing required fields: ${readable}` });
+    }
+
     const { data, error } = await supabase
       .from("profiles")
       .upsert(
@@ -53,7 +75,7 @@ router.put("/me", authenticate, async (req, res, next) => {
 });
 
 // ── Get student list (with filters) ──
-router.get("/students", authenticate, authorize("faculty", "admin"), async (req, res, next) => {
+router.get("/students", authenticate, authorize("admin", "career_advisor"), async (req, res, next) => {
   try {
     const { program, search, page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
@@ -83,36 +105,6 @@ router.get("/students", authenticate, authorize("faculty", "admin"), async (req,
   }
 });
 
-// ── Get faculty list (with filters) — all authenticated roles ──
-router.get("/faculty", authenticate, async (req, res, next) => {
-  try {
-    const { search, program, page = 1, limit = 20 } = req.query;
-    const offset = (page - 1) * limit;
-
-    let query = supabase
-      .from("profiles")
-      .select("id, first_name, last_name, email, avatar_url, program, department, current_job_title, linkedin_url", { count: "exact" })
-      .eq("role", "faculty")
-      .eq("is_active", true)
-      .order("last_name", { ascending: true })
-      .range(offset, offset + limit - 1);
-
-    if (search)  query = query.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%`);
-    if (program) query = query.eq("program", program);
-
-    const { data, error, count } = await query;
-    if (error) throw error;
-
-    res.json({
-      faculty: data,
-      total: count,
-      page: parseInt(page),
-      totalPages: Math.ceil(count / limit),
-    });
-  } catch (err) {
-    next(err);
-  }
-});
 
 // ── Get alumni list (with filters) ──
 router.get("/alumni", authenticate, async (req, res, next) => {
@@ -122,7 +114,7 @@ router.get("/alumni", authenticate, async (req, res, next) => {
 
     let query = supabase
       .from("profiles")
-      .select("id, first_name, last_name, email, program, department, graduation_year, current_job_title, current_company, industry, avatar_url, gender", { count: "exact" })
+      .select("id, first_name, last_name, email, program, department, graduation_year, current_job_title, current_company, industry, avatar_url, gender, is_private, is_verified", { count: "exact" })
       .eq("role", "alumni")
       .eq("is_active", true)
       .order("last_name", { ascending: true })
@@ -205,8 +197,28 @@ router.post("/avatar", authenticate, async (req, res, next) => {
   }
 });
 
-// ── Verify alumni (Faculty/Admin) ──
-router.patch("/:id/verify", authenticate, authorize("faculty", "admin"), async (req, res, next) => {
+// ── Assign role to a user (Admin only — career_advisor is set here, not on registration) ──
+router.patch("/:id/role", authenticate, authorize("admin"), async (req, res, next) => {
+  try {
+    const { role } = req.body;
+    const ALLOWED_ROLES = ["alumni", "student", "career_advisor", "admin"];
+    if (!ALLOWED_ROLES.includes(role)) {
+      return res.status(400).json({ error: `Invalid role. Must be one of: ${ALLOWED_ROLES.join(", ")}` });
+    }
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({ role })
+      .eq("id", req.params.id)
+      .select("id, first_name, last_name, email, role")
+      .single();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: "Profile not found" });
+    res.json(data);
+  } catch (err) { next(err); }
+});
+
+// ── Verify alumni (Career Advisor/Admin) ──
+router.patch("/:id/verify", authenticate, authorize("admin"), async (req, res, next) => {
   try {
     const { data, error } = await supabase
       .from("profiles")
@@ -222,4 +234,4 @@ router.patch("/:id/verify", authenticate, authorize("faculty", "admin"), async (
   }
 });
 
-export default router;
+module.exports = router;

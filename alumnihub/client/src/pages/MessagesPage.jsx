@@ -15,15 +15,23 @@ const PROGRAMS = [
   "Other",
 ];
 
-function formatMsgTime(ts) {
+function safeDate(ts) {
+  if (!ts) return null;
   const d = new Date(ts);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function formatMsgTime(ts) {
+  const d = safeDate(ts);
+  if (!d) return "";
   if (isToday(d))     return format(d, "h:mm a");
   if (isYesterday(d)) return "Yesterday";
   return format(d, "MMM d");
 }
 
 function formatSectionDate(ts) {
-  const d = new Date(ts);
+  const d = safeDate(ts);
+  if (!d) return "Unknown";
   if (isToday(d))     return "Today";
   if (isYesterday(d)) return "Yesterday";
   return format(d, "MMMM d, yyyy");
@@ -98,7 +106,7 @@ function SidebarRequestItem({ req, type, onAccept, onDecline, processing }) {
             <p className="text-xs text-gray-500 mt-1 italic line-clamp-2">"{req.message}"</p>
           )}
           <p className="text-xs text-gray-400 mt-1">
-            {formatDistanceToNow(new Date(req.created_at), { addSuffix: true })}
+            {safeDate(req.created_at) ? formatDistanceToNow(safeDate(req.created_at), { addSuffix: true }) : ""}
           </p>
         </div>
       </div>
@@ -125,7 +133,7 @@ function MessageBubble({ msg, isMine }) {
       <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${isMine ? "bg-blue-600 text-white rounded-br-sm" : "bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm"}`}>
         <p>{msg.content}</p>
         <p className={`text-xs mt-1 ${isMine ? "text-blue-200" : "text-gray-400"}`}>
-          {format(new Date(msg.created_at), "h:mm a")}
+          {safeDate(msg.created_at) ? format(safeDate(msg.created_at), "h:mm a") : ""}
         </p>
       </div>
     </div>
@@ -231,10 +239,12 @@ export default function MessagesPage() {
     const text = msgText.trim();
     setMsgText("");
     try {
-      const { data } = await api.post("/messages", { conversation_id: activeConv.id, content: text });
-      setMessages(prev => [...prev, data]);
+      const { data } = await api.post("/messages", { conversationId: activeConv.id, content: text });
+      // Backend returns { message, conversationId } — extract the message object
+      const newMsg = data.message || data;
+      setMessages(prev => [...prev, { ...newMsg, created_at: newMsg.created_at || new Date().toISOString() }]);
       setConversations(prev => prev.map(c => c.id === activeConv.id
-        ? { ...c, last_message: text, last_message_at: data.created_at }
+        ? { ...c, last_message: text, last_message_at: newMsg.created_at }
         : c));
     } catch(e) { console.error(e); setMsgText(text); }
     finally { setSending(false); }

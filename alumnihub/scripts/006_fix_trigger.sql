@@ -10,7 +10,7 @@
 -- Ensure 'student' is in the role constraint (safe to run even if already done)
 ALTER TABLE profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
 ALTER TABLE profiles ADD CONSTRAINT profiles_role_check
-  CHECK (role IN ('alumni', 'faculty', 'admin', 'student'));
+  CHECK (role IN ('alumni', 'career_advisor', 'admin', 'student'));
 
 -- Replace trigger function with a resilient version
 CREATE OR REPLACE FUNCTION handle_new_user()

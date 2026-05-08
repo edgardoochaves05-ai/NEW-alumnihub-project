@@ -1,6 +1,6 @@
-import { Router } from "express";
-import { authenticate, authorize } from "../middleware/auth.js";
-import { supabase } from "../config/supabase.js";
+const { Router } = require("express");
+const { authenticate, authorize } = require("../middleware/auth.js");
+const { supabase } = require("../config/supabase.js");
 
 const router = Router();
 
@@ -65,4 +65,4 @@ router.patch("/:id", authenticate, authorize("admin"), async (req, res, next) =>
   }
 });
 
-export default router;
+module.exports = router;
