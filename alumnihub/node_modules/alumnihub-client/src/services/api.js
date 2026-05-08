@@ -101,6 +101,12 @@ export const analyticsService = {
     api.get("/analytics/employment-trends", { params }),
 };
 
+// ── Chatbot (Student) ──
+export const chatbotService = {
+  sendMessage: (message, history) =>
+    api.post("/chatbot/message", { message, history }),
+};
+
 // ── Feedback ──
 export const feedbackService = {
   submit: (data) => api.post("/feedback", data),

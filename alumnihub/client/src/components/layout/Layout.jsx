@@ -5,6 +5,7 @@ import {
   BarChart3, Settings, LogOut, TrendingUp, GraduationCap, BookOpen,
   UserCog, Lightbulb,
 } from "lucide-react";
+import StudentChatbot from "../StudentChatbot";
 
 const navItems = [
   { to: "/dashboard",           icon: LayoutDashboard, label: "Dashboard",           roles: ["alumni", "student", "admin", "career_advisor"] },
@@ -105,6 +106,9 @@ export default function Layout() {
           <Outlet />
         </div>
       </main>
+
+      {/* Floating chatbot — students only */}
+      {effectiveRole === "student" && <StudentChatbot />}
     </div>
   );
 }
